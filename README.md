@@ -1,9 +1,7 @@
 # general-data-collector
 https://harmonic.ai/
 https://crunchbase.com
-https://dealroom.co/
 https://startupstash.com/
-https://www.angellist.com/
 https://growjo.com/
 https://www.infogreffe.fr/
 https://www.gov.uk/government/organisations/companies-house
