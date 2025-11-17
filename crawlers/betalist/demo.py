@@ -13,31 +13,30 @@ sample_data = [
         "source": "betalist",
         "url": "https://betalist.com/",
         "scraped_at": datetime.utcnow().isoformat(),
-        "title": "Example Startup 1",
-        "description": "A revolutionary AI-powered tool for developers",
-        "link": "https://betalist.com/startups/example1",
-        "category": "Developer Tools",
-        "date": "2025-11-15",
-        "logo": "https://betalist.com/logos/example1.png"
+        "startup_id": "135459",
+        "title": "SubWatch",
+        "description": "Never forget a subscription payment again",
+        "link": "https://betalist.com/startups/subwatch-2",
+        "logo": "https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5"
     },
     {
         "source": "betalist",
         "url": "https://betalist.com/",
         "scraped_at": datetime.utcnow().isoformat(),
+        "startup_id": "135460",
         "title": "Example Startup 2",
         "description": "Next-gen productivity app for remote teams",
-        "link": "https://betalist.com/startups/example2",
-        "category": "Productivity",
-        "date": "2025-11-14"
+        "link": "https://betalist.com/startups/example-2",
+        "logo": "https://betalist.com/images/example2.jpg"
     },
     {
         "source": "betalist",
         "url": "https://betalist.com/",
         "scraped_at": datetime.utcnow().isoformat(),
+        "startup_id": "135461",
         "title": "Example Startup 3",
         "description": "Social platform connecting creators worldwide",
-        "link": "https://betalist.com/startups/example3",
-        "category": "Social Media"
+        "link": "https://betalist.com/startups/example-3"
     }
 ]
 

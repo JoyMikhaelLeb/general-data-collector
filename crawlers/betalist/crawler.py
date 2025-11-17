@@ -138,7 +138,7 @@ class BetalistCrawler:
 
     def parse_page(self, html: str, url: str) -> List[Dict[str, Any]]:
         """
-        Parse HTML content and extract data.
+        Parse HTML content and extract data from betalist.com.
 
         Args:
             html: HTML content
@@ -150,61 +150,39 @@ class BetalistCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         items = []
 
-        # Betalist.com uses article tags for startup listings
-        # Look for startup cards/items on the page
-        selectors = [
-            'article',  # Main article container
-            '.startup-card',
-            '.startup-item',
-            '[class*="startup"]',
-            '[data-startup]',
-        ]
-
-        found_items = []
-        for selector in selectors:
-            found = soup.select(selector)
-            if found:
-                found_items = found
-                logger.info(f"Found {len(found)} items using selector: {selector}")
-                break
-
-        # Fallback: if no specific selectors work, try to find any content blocks
-        if not found_items:
-            found_items = soup.select('article, .post, .item, [class*="card"]')
-            logger.info(f"Using fallback selector, found {len(found_items)} items")
+        # Betalist.com uses <div class="block" id="startup-XXXXX"> for each startup
+        found_items = soup.select('div.block[id^="startup-"]')
+        logger.info(f"Found {len(found_items)} startup items")
 
         for item in found_items:
             try:
-                # Extract title (try multiple selectors)
-                title = (
-                    self._extract_text(item, 'h1') or
-                    self._extract_text(item, 'h2') or
-                    self._extract_text(item, 'h3') or
-                    self._extract_text(item, '.title') or
-                    self._extract_text(item, '[class*="title"]') or
-                    self._extract_text(item, 'a')
-                )
+                # Extract startup ID from div id attribute
+                startup_id = item.get('id', '').replace('startup-', '')
 
-                # Extract description
-                description = (
-                    self._extract_text(item, '.description') or
-                    self._extract_text(item, '[class*="description"]') or
-                    self._extract_text(item, 'p') or
-                    self._extract_text(item, '.excerpt')
-                )
+                # Title: <a class="... font-medium text-gray-900 ...">SubWatch</a>
+                title_elem = item.select_one('a.font-medium')
+                title = title_elem.get_text(strip=True) if title_elem else None
 
-                # Extract link
-                link = self._extract_link(item, url)
+                # Description: <a class="block text-gray-500 ...">Never forget a subscription...</a>
+                desc_elem = item.select_one('a.text-gray-500, a.dark\\:text-gray-400')
+                description = desc_elem.get_text(strip=True) if desc_elem else None
 
-                # Extract additional metadata
-                category = self._extract_text(item, '.category, [class*="category"], .tag, [class*="tag"]')
-                date = self._extract_text(item, 'time, [datetime], .date, [class*="date"]')
+                # Link: extract from title link href
+                link = None
+                if title_elem and title_elem.get('href'):
+                    link = urljoin(url, title_elem['href'])
 
-                # Try to find logo/image
+                # Image: extract from img tag
                 logo = None
                 img = item.select_one('img')
                 if img:
-                    logo = img.get('src') or img.get('data-src')
+                    # Try src first, then srcset (get first URL from srcset)
+                    logo = img.get('src')
+                    if not logo and img.get('srcset'):
+                        # Extract first URL from srcset
+                        srcset = img.get('srcset', '')
+                        if srcset:
+                            logo = srcset.split()[0]  # Get first URL before space/descriptor
                     if logo:
                         logo = urljoin(url, logo)
 
@@ -212,26 +190,25 @@ class BetalistCrawler:
                     'source': 'betalist',
                     'url': url,
                     'scraped_at': datetime.utcnow().isoformat(),
+                    'startup_id': startup_id,
                     'title': title,
                     'description': description,
                     'link': link,
-                    'category': category,
-                    'date': date,
                     'logo': logo,
                 }
 
-                # Only add if we have meaningful data (at least title or description)
-                if data.get('title') or data.get('description'):
+                # Only add if we have meaningful data (at least title or link)
+                if data.get('title') or data.get('link'):
                     # Remove None values for cleaner output
                     data = {k: v for k, v in data.items() if v is not None}
                     items.append(data)
-                    logger.debug(f"Extracted item: {title}")
+                    logger.debug(f"Extracted: {title} (ID: {startup_id})")
 
             except Exception as e:
                 logger.warning(f"Error parsing item: {e}")
                 continue
 
-        logger.info(f"Successfully parsed {len(items)} items from page")
+        logger.info(f"Successfully parsed {len(items)} startup items")
         return items
 
     def _extract_text(self, element, selector: str) -> Optional[str]:
@@ -351,8 +328,8 @@ class BetalistCrawler:
 
 async def main():
     """Example usage of the crawler."""
-    # Crawl 5 pages by default, adjust as needed
-    max_pages = 5
+    # Crawl only today's listings (1 page)
+    max_pages = 1
 
     async with BetalistCrawler(output_dir="data/betalist", rate_limit=2.0) as crawler:
         await crawler.crawl(max_pages=max_pages)
@@ -362,7 +339,7 @@ async def main():
             csv_file = crawler.save_csv()
 
             print(f"\n{'='*50}")
-            print(f"✓ Successfully crawled {len(crawler.data)} startups from {max_pages} pages")
+            print(f"✓ Successfully crawled {len(crawler.data)} startups")
             print(f"{'='*50}")
             print(f"JSON output: {json_file}")
             print(f"CSV output:  {csv_file}")

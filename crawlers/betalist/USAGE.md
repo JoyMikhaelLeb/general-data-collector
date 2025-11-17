@@ -12,7 +12,7 @@ python3 crawler.py
 ```
 
 This will:
-- Crawl 5 pages of startups from betalist.com
+- Crawl today's startups from betalist.com (1 page)
 - Save results to `data/betalist/betalist_TIMESTAMP.json`
 - Save results to `data/betalist/betalist_TIMESTAMP.csv`
 
@@ -21,12 +21,11 @@ Each startup entry includes:
 - `source`: Always "betalist"
 - `url`: The page URL that was scraped
 - `scraped_at`: ISO timestamp of when data was collected
+- `startup_id`: Unique ID from betalist.com
 - `title`: Startup name
-- `description`: Startup description
-- `link`: Link to startup details
-- `category`: Startup category (if available)
-- `date`: Launch/post date (if available)
-- `logo`: Logo URL (if available)
+- `description`: Startup tagline/description
+- `link`: Link to startup details page
+- `logo`: Logo/image URL (if available)
 
 ### Example Output
 ```json
@@ -34,13 +33,12 @@ Each startup entry includes:
   {
     "source": "betalist",
     "url": "https://betalist.com/",
-    "scraped_at": "2025-11-17T19:18:40.845700",
-    "title": "Example Startup",
-    "description": "A revolutionary AI-powered tool",
-    "link": "https://betalist.com/startups/example",
-    "category": "Developer Tools",
-    "date": "2025-11-15",
-    "logo": "https://betalist.com/logos/example.png"
+    "scraped_at": "2025-11-17T19:42:28.252499",
+    "startup_id": "135459",
+    "title": "SubWatch",
+    "description": "Never forget a subscription payment again",
+    "link": "https://betalist.com/startups/subwatch-2",
+    "logo": "https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5"
   }
 ]
 ```
