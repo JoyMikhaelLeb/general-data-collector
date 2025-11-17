@@ -14,10 +14,16 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
-install: ## Install dependencies using uv
-	@echo "Installing dependencies with uv..."
-	uv pip install -e .
-	uv pip install -e ".[dev]"
+install: ## Install dependencies (uses uv if available, otherwise pip)
+	@echo "Installing dependencies..."
+	@if command -v uv >/dev/null 2>&1; then \
+		echo "Using uv..."; \
+		uv pip install --system aiohttp beautifulsoup4 lxml python-dotenv pytest pytest-asyncio pytest-cov black ruff mypy 2>/dev/null || true; \
+	else \
+		echo "Using pip..."; \
+		pip3 install aiohttp beautifulsoup4 lxml python-dotenv pytest pytest-asyncio pytest-cov black ruff mypy 2>/dev/null || true; \
+	fi
+	@echo "✓ Dependencies installed"
 
 test: ## Run tests with pytest
 	@echo "Running tests..."

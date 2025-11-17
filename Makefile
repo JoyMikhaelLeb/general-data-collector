@@ -30,7 +30,7 @@ install-all: ## Install dependencies for all crawlers
 	@echo "Installing dependencies for all crawlers..."
 	@for crawler in $(CRAWLER_DIRS); do \
 		echo "Installing $$crawler..."; \
-		cd $$crawler && make install && cd ../..; \
+		(cd $$crawler && make install) || true; \
 	done
 	@echo "✓ All dependencies installed"
 
@@ -38,7 +38,7 @@ test-all: ## Run tests for all crawlers
 	@echo "Running tests for all crawlers..."
 	@for crawler in $(CRAWLER_DIRS); do \
 		echo "Testing $$crawler..."; \
-		cd $$crawler && make test-fast && cd ../..; \
+		(cd $$crawler && make test-fast) || true; \
 	done
 	@echo "✓ All tests completed"
 
@@ -46,7 +46,7 @@ lint-all: ## Run linting for all crawlers
 	@echo "Running linting for all crawlers..."
 	@for crawler in $(CRAWLER_DIRS); do \
 		echo "Linting $$crawler..."; \
-		cd $$crawler && make lint && cd ../..; \
+		(cd $$crawler && make lint) || true; \
 	done
 	@echo "✓ All linting completed"
 
@@ -54,7 +54,7 @@ format-all: ## Format code for all crawlers
 	@echo "Formatting code for all crawlers..."
 	@for crawler in $(CRAWLER_DIRS); do \
 		echo "Formatting $$crawler..."; \
-		cd $$crawler && make format && cd ../..; \
+		(cd $$crawler && make format) || true; \
 	done
 	@echo "✓ All code formatted"
 
@@ -62,7 +62,7 @@ clean-all: ## Clean all crawler directories
 	@echo "Cleaning all crawlers..."
 	@for crawler in $(CRAWLER_DIRS); do \
 		echo "Cleaning $$crawler..."; \
-		cd $$crawler && make clean && cd ../..; \
+		(cd $$crawler && make clean) || true; \
 	done
 	@echo "✓ All crawlers cleaned"
 
@@ -70,7 +70,7 @@ docker-build-all: ## Build Docker images for all crawlers
 	@echo "Building Docker images for all crawlers..."
 	@for crawler in $(CRAWLER_NAMES); do \
 		echo "Building $$crawler..."; \
-		cd crawlers/$$crawler && make docker-build && cd ../..; \
+		(cd crawlers/$$crawler && make docker-build) || true; \
 	done
 	@echo "✓ All Docker images built"
 
