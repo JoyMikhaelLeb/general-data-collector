@@ -150,29 +150,88 @@ class BetalistCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         items = []
 
-        # TODO: Customize parsing logic for betalist.com
-        # This is a template that should be adapted to the specific site
+        # Betalist.com uses article tags for startup listings
+        # Look for startup cards/items on the page
+        selectors = [
+            'article',  # Main article container
+            '.startup-card',
+            '.startup-item',
+            '[class*="startup"]',
+            '[data-startup]',
+        ]
 
-        # Look for common company/startup data patterns
-        for item in soup.select('[class*="company"], [class*="startup"], [class*="item"]'):
+        found_items = []
+        for selector in selectors:
+            found = soup.select(selector)
+            if found:
+                found_items = found
+                logger.info(f"Found {len(found)} items using selector: {selector}")
+                break
+
+        # Fallback: if no specific selectors work, try to find any content blocks
+        if not found_items:
+            found_items = soup.select('article, .post, .item, [class*="card"]')
+            logger.info(f"Using fallback selector, found {len(found_items)} items")
+
+        for item in found_items:
             try:
+                # Extract title (try multiple selectors)
+                title = (
+                    self._extract_text(item, 'h1') or
+                    self._extract_text(item, 'h2') or
+                    self._extract_text(item, 'h3') or
+                    self._extract_text(item, '.title') or
+                    self._extract_text(item, '[class*="title"]') or
+                    self._extract_text(item, 'a')
+                )
+
+                # Extract description
+                description = (
+                    self._extract_text(item, '.description') or
+                    self._extract_text(item, '[class*="description"]') or
+                    self._extract_text(item, 'p') or
+                    self._extract_text(item, '.excerpt')
+                )
+
+                # Extract link
+                link = self._extract_link(item, url)
+
+                # Extract additional metadata
+                category = self._extract_text(item, '.category, [class*="category"], .tag, [class*="tag"]')
+                date = self._extract_text(item, 'time, [datetime], .date, [class*="date"]')
+
+                # Try to find logo/image
+                logo = None
+                img = item.select_one('img')
+                if img:
+                    logo = img.get('src') or img.get('data-src')
+                    if logo:
+                        logo = urljoin(url, logo)
+
                 data = {
                     'source': 'betalist',
                     'url': url,
                     'scraped_at': datetime.utcnow().isoformat(),
-                    'title': self._extract_text(item, '[class*="title"], h1, h2, h3'),
-                    'description': self._extract_text(item, '[class*="description"], p'),
-                    'link': self._extract_link(item, url),
+                    'title': title,
+                    'description': description,
+                    'link': link,
+                    'category': category,
+                    'date': date,
+                    'logo': logo,
                 }
 
-                # Only add if we have meaningful data
+                # Only add if we have meaningful data (at least title or description)
                 if data.get('title') or data.get('description'):
+                    # Remove None values for cleaner output
+                    data = {k: v for k, v in data.items() if v is not None}
                     items.append(data)
+                    logger.debug(f"Extracted item: {title}")
 
             except Exception as e:
                 logger.warning(f"Error parsing item: {e}")
                 continue
 
+        logger.info(f"Successfully parsed {len(items)} items from page")
         return items
 
     def _extract_text(self, element, selector: str) -> Optional[str]:
@@ -195,26 +254,44 @@ class BetalistCrawler:
             pass
         return None
 
-    async def crawl(self, start_url: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def crawl(
+        self,
+        start_url: Optional[str] = None,
+        max_pages: int = 1
+    ) -> List[Dict[str, Any]]:
         """
-        Main crawl method.
+        Main crawl method with pagination support.
 
         Args:
             start_url: Starting URL (defaults to BASE_URL)
+            max_pages: Maximum number of pages to crawl
 
         Returns:
             List of crawled data items
         """
         url = start_url or self.BASE_URL
 
-        logger.info(f"Starting crawl from: {url}")
+        logger.info(f"Starting crawl from: {url} (max {max_pages} pages)")
 
-        html = await self.fetch(url)
-        if html:
-            items = self.parse_page(html, url)
-            self.data.extend(items)
-            logger.info(f"Extracted {len(items)} items from {url}")
+        for page in range(1, max_pages + 1):
+            # Construct page URL (betalist uses /startups/page/N format)
+            if page == 1:
+                page_url = url
+            else:
+                page_url = f"{url.rstrip('/')}/startups/page/{page}"
 
+            logger.info(f"Crawling page {page}/{max_pages}: {page_url}")
+
+            html = await self.fetch(page_url)
+            if html:
+                items = self.parse_page(html, page_url)
+                self.data.extend(items)
+                logger.info(f"Extracted {len(items)} items from page {page}")
+            else:
+                logger.warning(f"Failed to fetch page {page}, stopping pagination")
+                break
+
+        logger.info(f"Total items collected: {len(self.data)}")
         return self.data
 
     def save_json(self, filename: Optional[str] = None) -> Path:
@@ -274,13 +351,23 @@ class BetalistCrawler:
 
 async def main():
     """Example usage of the crawler."""
-    async with BetalistCrawler(output_dir="data/betalist") as crawler:
-        await crawler.crawl()
+    # Crawl 5 pages by default, adjust as needed
+    max_pages = 5
+
+    async with BetalistCrawler(output_dir="data/betalist", rate_limit=2.0) as crawler:
+        await crawler.crawl(max_pages=max_pages)
 
         if crawler.data:
-            crawler.save_json()
-            crawler.save_csv()
-            print(f"Successfully crawled {len(crawler.data)} items")
+            json_file = crawler.save_json()
+            csv_file = crawler.save_csv()
+
+            print(f"\n{'='*50}")
+            print(f"✓ Successfully crawled {len(crawler.data)} startups from {max_pages} pages")
+            print(f"{'='*50}")
+            print(f"JSON output: {json_file}")
+            print(f"CSV output:  {csv_file}")
+            print(f"\nSample data (first item):")
+            print(json.dumps(crawler.data[0], indent=2))
         else:
             print("No data collected")
 
