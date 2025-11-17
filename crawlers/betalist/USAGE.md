@@ -14,7 +14,6 @@ python3 crawler.py
 This will:
 - Crawl today's startups from betalist.com (1 page)
 - Save results to `data/betalist/betalist_TIMESTAMP.json`
-- Save results to `data/betalist/betalist_TIMESTAMP.csv`
 
 ### Output Format
 Each startup entry includes:
@@ -26,6 +25,7 @@ Each startup entry includes:
 - `description`: Startup tagline/description
 - `link`: Link to startup details page
 - `logo`: Logo/image URL (if available)
+- `date_launched`: Launch date in DD-MM-YYYY format (extracted from page headers)
 
 ### Example Output
 ```json
@@ -33,12 +33,13 @@ Each startup entry includes:
   {
     "source": "betalist",
     "url": "https://betalist.com/",
-    "scraped_at": "2025-11-17T19:42:28.252499",
+    "scraped_at": "2025-11-17T19:51:50.579082",
     "startup_id": "135459",
-    "title": "SubWatch",
+    "title": "ClioWright",
     "description": "Never forget a subscription payment again",
-    "link": "https://betalist.com/startups/subwatch-2",
-    "logo": "https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5"
+    "link": "https://betalist.com/startups/cliowright",
+    "logo": "https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5",
+    "date_launched": "17-11-2025"
   }
 ]
 ```
@@ -62,7 +63,6 @@ async def main():
 
         # Save to custom filename
         crawler.save_json("my_startups.json")
-        crawler.save_csv("my_startups.csv")
 
 asyncio.run(main())
 ```

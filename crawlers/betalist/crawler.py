@@ -150,7 +150,27 @@ class BetalistCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         items = []
 
-        # Betalist.com uses <div class="block" id="startup-XXXXX"> for each startup
+        # Build a map of startup elements to their launch dates
+        # Dates appear as headers (h2, h3) before groups of startups
+        current_date = None
+        date_map = {}
+
+        # Iterate through all elements to find date headers and associate them with startups
+        for element in soup.find_all(['h1', 'h2', 'h3', 'div']):
+            # Check if this is a date header
+            if element.name in ['h1', 'h2', 'h3']:
+                text = element.get_text(strip=True)
+                # Common date formats: "Today", "Yesterday", "17 November 2025", etc.
+                if text and any(keyword in text.lower() for keyword in ['today', 'yesterday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']) or any(char.isdigit() for char in text):
+                    current_date = self._parse_date(text)
+                    logger.debug(f"Found date header: {text} -> {current_date}")
+
+            # Check if this is a startup div
+            elif element.name == 'div' and element.get('id', '').startswith('startup-'):
+                if current_date:
+                    date_map[element.get('id')] = current_date
+
+        # Now extract all startups
         found_items = soup.select('div.block[id^="startup-"]')
         logger.info(f"Found {len(found_items)} startup items")
 
@@ -186,6 +206,9 @@ class BetalistCrawler:
                     if logo:
                         logo = urljoin(url, logo)
 
+                # Get launch date from map
+                date_launched = date_map.get(item.get('id'))
+
                 data = {
                     'source': 'betalist',
                     'url': url,
@@ -195,6 +218,7 @@ class BetalistCrawler:
                     'description': description,
                     'link': link,
                     'logo': logo,
+                    'date_launched': date_launched,
                 }
 
                 # Only add if we have meaningful data (at least title or link)
@@ -202,7 +226,7 @@ class BetalistCrawler:
                     # Remove None values for cleaner output
                     data = {k: v for k, v in data.items() if v is not None}
                     items.append(data)
-                    logger.debug(f"Extracted: {title} (ID: {startup_id})")
+                    logger.debug(f"Extracted: {title} (ID: {startup_id}, Date: {date_launched})")
 
             except Exception as e:
                 logger.warning(f"Error parsing item: {e}")
@@ -210,6 +234,40 @@ class BetalistCrawler:
 
         logger.info(f"Successfully parsed {len(items)} startup items")
         return items
+
+    def _parse_date(self, date_text: str) -> Optional[str]:
+        """Parse and normalize date text to DD-MM-YYYY format."""
+        from datetime import datetime, timedelta
+
+        date_text = date_text.strip().lower()
+        today = datetime.now()
+
+        # Handle relative dates
+        if 'today' in date_text:
+            return today.strftime('%d-%m-%Y')
+        elif 'yesterday' in date_text:
+            return (today - timedelta(days=1)).strftime('%d-%m-%Y')
+
+        # Try to parse various date formats
+        formats = [
+            '%d %B %Y',      # 17 November 2025
+            '%B %d, %Y',     # November 17, 2025
+            '%d/%m/%Y',      # 17/11/2025
+            '%Y-%m-%d',      # 2025-11-17
+            '%d-%m-%Y',      # 17-11-2025
+        ]
+
+        for fmt in formats:
+            try:
+                # Remove extra text and try parsing
+                cleaned = date_text.replace(',', '').strip()
+                parsed = datetime.strptime(cleaned, fmt)
+                return parsed.strftime('%d-%m-%Y')
+            except ValueError:
+                continue
+
+        # If no format matched, return the original text
+        return date_text
 
     def _extract_text(self, element, selector: str) -> Optional[str]:
         """Extract and clean text from element."""
@@ -293,38 +351,6 @@ class BetalistCrawler:
         logger.info(f"Saved {len(self.data)} items to {filepath}")
         return filepath
 
-    def save_csv(self, filename: Optional[str] = None) -> Path:
-        """
-        Save data as CSV.
-
-        Args:
-            filename: Output filename (auto-generated if None)
-
-        Returns:
-            Path to saved file
-        """
-        import csv
-
-        if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"betalist_{timestamp}.csv"
-
-        filepath = self.output_dir / filename
-
-        if not self.data:
-            logger.warning("No data to save")
-            return filepath
-
-        keys = self.data[0].keys()
-
-        with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=keys)
-            writer.writeheader()
-            writer.writerows(self.data)
-
-        logger.info(f"Saved {len(self.data)} items to {filepath}")
-        return filepath
-
 
 async def main():
     """Example usage of the crawler."""
@@ -336,13 +362,11 @@ async def main():
 
         if crawler.data:
             json_file = crawler.save_json()
-            csv_file = crawler.save_csv()
 
             print(f"\n{'='*50}")
             print(f"✓ Successfully crawled {len(crawler.data)} startups")
             print(f"{'='*50}")
             print(f"JSON output: {json_file}")
-            print(f"CSV output:  {csv_file}")
             print(f"\nSample data (first item):")
             print(json.dumps(crawler.data[0], indent=2))
         else:
