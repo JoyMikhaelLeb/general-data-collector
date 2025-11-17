@@ -5,58 +5,58 @@ This guide helps you set up the General Data Collector project on your local mac
 ## Prerequisites
 
 - **Python 3.11+** (check with `python3 --version`)
-- **pip** (included with Python)
+- **uv** (Fast Python package manager - required)
 - **Make** (usually pre-installed on Mac/Linux)
 - **Docker** (optional, for containerized deployment)
 
-## Quick Start
+## Step 1: Install uv
 
-### Option 1: Using pip (Recommended for most users)
+The project uses **uv** for fast, reliable dependency management. Install it first:
 
-The project automatically uses `pip` if `uv` is not available:
+### macOS / Linux
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Windows
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### Add to PATH
+
+After installation, add uv to your PATH:
+
+```bash
+# For zsh (macOS default)
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# For bash
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Verify Installation
+```bash
+uv --version
+# Should output: uv 0.x.x
+```
+
+## Step 2: Clone and Setup
 
 ```bash
 # Clone the repository
 git clone <your-repo-url>
 cd general-data-collector
 
-# Install dependencies for a specific crawler
-cd crawlers/harmonic_ai
-make install
-
-# Run the crawler
-python3 crawler.py
-```
-
-### Option 2: Install all crawlers at once
-
-```bash
-# From the project root
+# Install all crawler dependencies
 make install-all
 ```
 
-This will install dependencies for all 22 crawlers using pip.
+This will install dependencies for all 22 crawlers using uv (very fast!).
 
-### Option 3: Using uv (Advanced - Faster)
-
-If you want faster dependency installation, you can optionally install `uv`:
-
-#### On macOS/Linux:
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-#### On Windows:
-```powershell
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-Then run:
-```bash
-make install-all  # Will automatically use uv if available
-```
-
-## Running Crawlers
+## Step 3: Run a Crawler
 
 ### Single Crawler
 
@@ -64,7 +64,7 @@ make install-all  # Will automatically use uv if available
 # Navigate to crawler directory
 cd crawlers/harmonic_ai
 
-# Run directly
+# Run the crawler
 python3 crawler.py
 
 # Or use Make
@@ -84,7 +84,9 @@ make test-harmonic_ai
 make install-harmonic_ai
 ```
 
-### All Crawlers (Docker Compose)
+## Running with Docker
+
+If you prefer Docker (no uv needed in container):
 
 ```bash
 # Build all images
@@ -119,42 +121,6 @@ You should see:
 ============================================================
 ```
 
-## Common Issues
-
-### "uv: No such file or directory"
-
-**Solution**: The Makefiles now automatically fall back to `pip`. Just run the command again:
-```bash
-make install
-```
-
-### "ModuleNotFoundError: No module named 'aiohttp'"
-
-**Solution**: Install dependencies:
-```bash
-pip3 install aiohttp beautifulsoup4 lxml python-dotenv
-```
-
-### "Permission denied" errors
-
-**Solution**: Use pip with --user flag:
-```bash
-pip3 install --user aiohttp beautifulsoup4 lxml python-dotenv
-```
-
-Or create a virtual environment:
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-make install
-```
-
-### Docker not found
-
-**Solution**: Install Docker from https://docs.docker.com/get-docker/
-
-Docker is optional - you can run all crawlers directly with Python.
-
 ## Project Structure
 
 ```
@@ -169,14 +135,55 @@ general-data-collector/
 └── README.md            # Main documentation
 ```
 
+## Common Issues
+
+### "uv: command not found"
+
+**Solution**: uv is not installed or not in PATH.
+
+Install uv:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Add to PATH:
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+source ~/.zshrc  # or ~/.bashrc
+```
+
+### "Unable to read current working directory"
+
+**Solution**: macOS permission issue. Navigate away and back:
+```bash
+cd ~
+cd general-data-collector
+```
+
+Or open a new terminal window.
+
+### "ModuleNotFoundError" after installation
+
+**Solution**: Re-run the install:
+```bash
+cd crawlers/harmonic_ai
+make install
+```
+
+### Docker not found
+
+**Solution**: Install Docker from https://docs.docker.com/get-docker/
+
+Docker is optional - you can run all crawlers directly with Python + uv.
+
 ## Development Setup
 
 For development work:
 
 ```bash
-# Install with dev dependencies
+# Install specific crawler with dev dependencies
 cd crawlers/harmonic_ai
-pip3 install pytest pytest-asyncio pytest-cov black ruff mypy
+make install
 
 # Run tests
 make test
@@ -187,6 +194,57 @@ make format
 # Run linting
 make lint
 ```
+
+## Why uv?
+
+uv is a blazing-fast Python package installer and resolver, written in Rust:
+
+- **10-100x faster** than pip
+- **Reliable** dependency resolution
+- **Compatible** with pip and PyPI
+- **Lightweight** (~10MB)
+
+Learn more at: https://github.com/astral-sh/uv
+
+## Quick Command Reference
+
+```bash
+# Project root commands
+make list              # List all crawlers
+make install-all       # Install all dependencies (uses uv)
+make test-all         # Test all crawlers
+make help             # Show all commands
+
+# Individual crawler commands (from crawler directory)
+make install          # Install dependencies (uses uv)
+make run             # Run crawler
+make test            # Run tests
+make docker-build    # Build Docker image
+make docker-run      # Run in Docker
+
+# Docker Compose (from project root)
+docker-compose up    # Start all crawlers
+docker-compose down  # Stop all crawlers
+docker-compose logs  # View logs
+```
+
+## Alternative: Using Docker Only
+
+If you don't want to install uv on your local machine, you can use Docker exclusively:
+
+```bash
+# Build a specific crawler image
+cd crawlers/harmonic_ai
+make docker-build
+
+# Run in Docker
+make docker-run
+
+# Test in Docker
+make docker-test
+```
+
+All dependencies are installed inside the container using uv.
 
 ## Next Steps
 
@@ -202,36 +260,14 @@ make lint
 - Run `make help` for available commands
 - Open an issue on GitHub
 
-## Quick Command Reference
-
-```bash
-# Project root commands
-make list              # List all crawlers
-make install-all       # Install all dependencies
-make test-all         # Test all crawlers
-make help             # Show all commands
-
-# Individual crawler commands (from crawler directory)
-make install          # Install dependencies
-make run             # Run crawler
-make test            # Run tests
-make docker-build    # Build Docker image
-make docker-run      # Run in Docker
-
-# Docker Compose (from project root)
-docker-compose up    # Start all crawlers
-docker-compose down  # Stop all crawlers
-docker-compose logs  # View logs
-```
-
 ## Troubleshooting
 
 If you encounter any issues:
 
 1. Ensure Python 3.11+ is installed: `python3 --version`
-2. Update pip: `pip3 install --upgrade pip`
-3. Try with a virtual environment (see above)
-4. Check if the port is available (for Docker)
+2. Ensure uv is installed: `uv --version`
+3. Check uv is in PATH: `which uv`
+4. Try opening a new terminal window
 5. Review error logs carefully
 
 For more help, see the [CONTRIBUTING.md](CONTRIBUTING.md) guide or open an issue.
