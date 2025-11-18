@@ -15,31 +15,31 @@ sample_data = [
         "scraped_at": datetime.utcnow().isoformat(),
         "startup_id": "135459",
         "title": "ClioWright",
-        "description": "Never forget a subscription payment again",
+        "description": "AI writing assistant",
         "link": "https://betalist.com/startups/cliowright",
         "logo": "https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5",
+        "date_launched": "18-11-2025"
+    },
+    {
+        "source": "betalist",
+        "url": "https://betalist.com/",
+        "scraped_at": datetime.utcnow().isoformat(),
+        "startup_id": "134804",
+        "title": "Nextjsshop",
+        "description": "Marketplace for Nextjs",
+        "link": "https://betalist.com/startups/nextjsshop",
+        "logo": "https://resize.imagekit.co/xmiq7XJ2UvU4kiSlhoYe_OvZTX1Ek_aEGAKYKdlI2Y8/rs:fill:480:360/plain/s3://betalist-production/ekrspv9n19q4r537z8cfcytj3ove",
         "date_launched": "17-11-2025"
     },
     {
         "source": "betalist",
         "url": "https://betalist.com/",
         "scraped_at": datetime.utcnow().isoformat(),
-        "startup_id": "135460",
-        "title": "Skilltricks",
-        "description": "Next-gen productivity app for remote teams",
-        "link": "https://betalist.com/startups/skilltricks",
-        "logo": "https://betalist.com/images/skilltricks.jpg",
+        "startup_id": "134803",
+        "title": "Skilltracker",
+        "description": "Track your skills and progress",
+        "link": "https://betalist.com/startups/skilltracker",
         "date_launched": "16-11-2025"
-    },
-    {
-        "source": "betalist",
-        "url": "https://betalist.com/",
-        "scraped_at": datetime.utcnow().isoformat(),
-        "startup_id": "135461",
-        "title": "Example Startup 3",
-        "description": "Social platform connecting creators worldwide",
-        "link": "https://betalist.com/startups/example-3",
-        "date_launched": "15-11-2025"
     }
 ]
 

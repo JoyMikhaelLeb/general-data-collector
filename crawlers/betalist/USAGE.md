@@ -33,12 +33,18 @@ Each startup entry includes:
   {
     "source": "betalist",
     "url": "https://betalist.com/",
-    "scraped_at": "2025-11-17T19:51:50.579082",
+    "scraped_at": "2025-11-18T07:46:02.161418",
     "startup_id": "135459",
     "title": "ClioWright",
-    "description": "Never forget a subscription payment again",
+    "description": "AI writing assistant",
     "link": "https://betalist.com/startups/cliowright",
     "logo": "https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5",
+    "date_launched": "18-11-2025"
+  },
+  {
+    "startup_id": "134804",
+    "title": "Nextjsshop",
+    "description": "Marketplace for Nextjs",
     "date_launched": "17-11-2025"
   }
 ]

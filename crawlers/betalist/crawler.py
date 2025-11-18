@@ -151,22 +151,22 @@ class BetalistCrawler:
         items = []
 
         # Build a map of startup elements to their launch dates
-        # Dates appear as headers (h2, h3) before groups of startups
+        # Dates appear in divs with class "col-span-full text-3xl..." before groups of startups
+        # Example: <div class="col-span-full..."><strong>Today</strong> November 18th</div>
         current_date = None
         date_map = {}
 
-        # Iterate through all elements to find date headers and associate them with startups
-        for element in soup.find_all(['h1', 'h2', 'h3', 'div']):
-            # Check if this is a date header
-            if element.name in ['h1', 'h2', 'h3']:
+        # Find all elements to identify date headers and startups
+        for element in soup.find_all('div'):
+            # Check if this is a date header div
+            classes = element.get('class', [])
+            if 'col-span-full' in classes and 'text-3xl' in classes:
                 text = element.get_text(strip=True)
-                # Common date formats: "Today", "Yesterday", "17 November 2025", etc.
-                if text and any(keyword in text.lower() for keyword in ['today', 'yesterday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']) or any(char.isdigit() for char in text):
-                    current_date = self._parse_date(text)
-                    logger.debug(f"Found date header: {text} -> {current_date}")
+                current_date = self._parse_date(text)
+                logger.debug(f"Found date header: {text} -> {current_date}")
 
             # Check if this is a startup div
-            elif element.name == 'div' and element.get('id', '').startswith('startup-'):
+            elif element.get('id', '').startswith('startup-'):
                 if current_date:
                     date_map[element.get('id')] = current_date
 
@@ -236,19 +236,47 @@ class BetalistCrawler:
         return items
 
     def _parse_date(self, date_text: str) -> Optional[str]:
-        """Parse and normalize date text to DD-MM-YYYY format."""
-        from datetime import datetime, timedelta
+        """
+        Parse and normalize date text to DD-MM-YYYY format.
 
-        date_text = date_text.strip().lower()
+        Handles formats like:
+        - "Today November 18th"
+        - "Yesterday November 17th"
+        - "November 18th"
+        """
+        from datetime import datetime, timedelta
+        import re
+
+        date_text = date_text.strip()
         today = datetime.now()
 
-        # Handle relative dates
-        if 'today' in date_text:
+        # Extract the actual date from formats like "Today November 18th"
+        # Use regex to find month and day pattern
+        month_pattern = r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d+)'
+        match = re.search(month_pattern, date_text.lower())
+
+        if match:
+            month_name = match.group(1)
+            day = match.group(2).rstrip('stndrh')  # Remove st, nd, rd, th suffixes
+
+            # Construct date string with current year
+            year = today.year
+            date_string = f"{day} {month_name} {year}"
+
+            try:
+                parsed = datetime.strptime(date_string, '%d %B %Y')
+                return parsed.strftime('%d-%m-%Y')
+            except ValueError:
+                pass
+
+        # Fallback: Handle relative dates if no explicit date found
+        date_lower = date_text.lower()
+        if 'today' in date_lower:
             return today.strftime('%d-%m-%Y')
-        elif 'yesterday' in date_text:
+        elif 'yesterday' in date_lower:
             return (today - timedelta(days=1)).strftime('%d-%m-%Y')
 
-        # Try to parse various date formats
+        # Try to parse other date formats
         formats = [
             '%d %B %Y',      # 17 November 2025
             '%B %d, %Y',     # November 17, 2025
@@ -259,15 +287,15 @@ class BetalistCrawler:
 
         for fmt in formats:
             try:
-                # Remove extra text and try parsing
                 cleaned = date_text.replace(',', '').strip()
                 parsed = datetime.strptime(cleaned, fmt)
                 return parsed.strftime('%d-%m-%Y')
             except ValueError:
                 continue
 
-        # If no format matched, return the original text
-        return date_text
+        # If no format matched, return None
+        logger.warning(f"Could not parse date: {date_text}")
+        return None
 
     def _extract_text(self, element, selector: str) -> Optional[str]:
         """Extract and clean text from element."""

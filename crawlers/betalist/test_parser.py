@@ -15,32 +15,36 @@ from crawler import BetalistCrawler
 sample_html = """
 <html>
 <body>
-<h2>Today</h2>
-<div class="block" id="startup-135459">
-  <a class="block min-w-[128px] rounded-sm overflow-hidden relative aspect-4/3 ring-1 ring-black/5 dark:ring-white/10 hover:ring-black/10 dark:hover:ring-white/20 hover:after:block hover:after:absolute hover:after:inset-0 hover:after:bg-black/10 dark:hover:after:bg-white/10" style="background-color: #110f18" href="/startups/subwatch-2">
-    <img srcset="https://resize.imagekit.co/_axL5msliB5FPWRZSZCn2uQ5MHAeRHXNDs02u1aHUY4/rs:fill:480:360/dpr:1/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5 1x, https://resize.imagekit.co/U-TtFwzVsCkm4qccDFsAxVlMLXHp-r-ZLMlw7qtnIBo/rs:fill:480:360/dpr:2/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5 2x, https://resize.imagekit.co/vANk79rAE9Lw0Bi21VCEUedhYV9h8q4XY8KmDqQE9Ng/rs:fill:480:360/dpr:3/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5 3x" class="block object-cover absolute inset-0 h-full w-full" src="https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5">
-</a>
-  <div class="block">
-    <div class="mt-3 text-base">
-      <div class="flex items-start gap-2">
-        <a class="block whitespace-nowrap text-ellipsis overflow-hidden font-medium text-gray-900 dark:text-gray-100" href="/startups/subwatch-2">ClioWright</a>
-      </div>
-      <a class="block text-gray-500 dark:text-gray-400" href="/startups/subwatch-2">Never forget a subscription payment again</a>
-    </div>
-  </div>
+<div class="col-span-full text-3xl text-gray-300 dark:text-gray-600 [&>strong]:text-black dark:[&>strong]:text-white -xmb-24" data-duplicate-id="day_1763424000">
+  <strong>Today</strong> November 18th
 </div>
-
-<h2>Yesterday</h2>
-<div class="block" id="startup-135460">
-  <a class="block min-w-[128px] rounded-sm overflow-hidden relative aspect-4/3" href="/startups/skilltricks">
-    <img src="https://example.com/image.jpg">
+<div class="block" id="startup-135459">
+  <a class="block min-w-[128px] rounded-sm overflow-hidden relative aspect-4/3 ring-1 ring-black/5 dark:ring-white/10 hover:ring-black/10 dark:hover:ring-white/20 hover:after:block hover:after:absolute hover:after:inset-0 hover:after:bg-black/10 dark:hover:after:bg-white/10" style="background-color: #110f18" href="/startups/cliowright">
+    <img srcset="https://resize.imagekit.co/_axL5msliB5FPWRZSZCn2uQ5MHAeRHXNDs02u1aHUY4/rs:fill:480:360/dpr:1/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5 1x" class="block object-cover absolute inset-0 h-full w-full" src="https://resize.imagekit.co/wMcJKw61N4F_Zzk2Yq68wbSxuyblxuza-KnNV9fk7hY/rs:fill:480:360/plain/s3://betalist-production/r3kim3bjds8yio4tn0suetrjv2l5">
   </a>
   <div class="block">
     <div class="mt-3 text-base">
       <div class="flex items-start gap-2">
-        <a class="block whitespace-nowrap text-ellipsis overflow-hidden font-medium text-gray-900 dark:text-gray-100" href="/startups/skilltricks">Skilltricks</a>
+        <a class="block whitespace-nowrap text-ellipsis overflow-hidden font-medium text-gray-900 dark:text-gray-100" href="/startups/cliowright">ClioWright</a>
       </div>
-      <a class="block text-gray-500 dark:text-gray-400" href="/startups/skilltricks">This is an example description</a>
+      <a class="block text-gray-500 dark:text-gray-400" href="/startups/cliowright">AI writing assistant</a>
+    </div>
+  </div>
+</div>
+
+<div class="col-span-full text-3xl text-gray-300 dark:text-gray-600 [&>strong]:text-black dark:[&>strong]:text-white -xmb-24" data-duplicate-id="day_1763337600">
+  <strong>Yesterday</strong> November 17th
+</div>
+<div class="block" id="startup-134804">
+  <a class="block min-w-[128px] rounded-sm overflow-hidden relative aspect-4/3" style="background-color: #d5f5ea" href="/startups/nextjsshop">
+    <img src="https://resize.imagekit.co/xmiq7XJ2UvU4kiSlhoYe_OvZTX1Ek_aEGAKYKdlI2Y8/rs:fill:480:360/plain/s3://betalist-production/ekrspv9n19q4r537z8cfcytj3ove">
+  </a>
+  <div class="block">
+    <div class="mt-3 text-base">
+      <div class="flex items-start gap-2">
+        <a class="block whitespace-nowrap text-ellipsis overflow-hidden font-medium text-gray-900 dark:text-gray-100" href="/startups/nextjsshop">Nextjsshop</a>
+      </div>
+      <a class="block text-gray-500 dark:text-gray-400" href="/startups/nextjsshop">Marketplace for Nextjs</a>
     </div>
   </div>
 </div>
