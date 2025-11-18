@@ -1,10 +1,14 @@
 """
-www.gov.uk/government/organisations/companies-house Web Crawler
+Companies House UK Web Crawler
 
-This crawler extracts data from www.gov.uk/government/organisations/companies-house.
-UK companies registry
+This crawler searches for UK companies on find-and-update.company-information.service.gov.uk
+and extracts basic company information.
 
-It follows ethical scraping practices with rate limiting and proper headers.
+Usage:
+    python3 crawler.py
+
+Input: companies.txt (one company name per line)
+Output: data/companies_house/companies_TIMESTAMP.json
 """
 
 import asyncio
@@ -13,7 +17,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, quote_plus
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -28,22 +32,24 @@ logger = logging.getLogger(__name__)
 
 class CompaniesHouseCrawler:
     """
-    Crawler for www.gov.uk/government/organisations/companies-house.
+    Crawler for UK Companies House website.
 
-    Features:
-    - Asynchronous requests for performance
-    - Rate limiting to respect server resources
-    - Automatic retry with exponential backoff
-    - Data validation and cleaning
-    - Export to JSON/CSV formats
+    Searches for companies by name and extracts:
+    - Company number
+    - Company name
+    - Company status
+    - Incorporation date
+    - Registered address
+    - Company type
     """
 
-    BASE_URL = "https://www.gov.uk/government/organisations/companies-house"
+    BASE_URL = "https://find-and-update.company-information.service.gov.uk"
+    SEARCH_URL = f"{BASE_URL}/search/companies"
 
     def __init__(
         self,
-        output_dir: str = "data",
-        rate_limit: float = 1.0,
+        output_dir: str = "data/companies_house",
+        rate_limit: float = 2.0,
         max_retries: int = 3,
         timeout: int = 30
     ):
@@ -76,9 +82,9 @@ class CompaniesHouseCrawler:
     async def start(self):
         """Initialize the HTTP session."""
         headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; DataCollectorBot/1.0)',
-            'Accept': 'text/html,application/json',
-            'Accept-Language': 'en-US,en;q=0.9',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-GB,en;q=0.9',
         }
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         self.session = aiohttp.ClientSession(
@@ -93,11 +99,7 @@ class CompaniesHouseCrawler:
             await self.session.close()
             logger.info("Crawler session closed")
 
-    async def fetch(
-        self,
-        url: str,
-        retries: int = 0
-    ) -> Optional[str]:
+    async def fetch(self, url: str, retries: int = 0) -> Optional[str]:
         """
         Fetch a URL with retry logic.
 
@@ -136,85 +138,120 @@ class CompaniesHouseCrawler:
 
         return None
 
-    def parse_page(self, html: str, url: str) -> List[Dict[str, Any]]:
+    def parse_search_results(self, html: str, search_query: str) -> List[Dict[str, Any]]:
         """
-        Parse HTML content and extract data.
+        Parse search results page to find companies.
 
         Args:
             html: HTML content
-            url: Source URL
+            search_query: Original search query
 
         Returns:
-            List of extracted data items
+            List of company data dictionaries
         """
         soup = BeautifulSoup(html, 'html.parser')
-        items = []
+        results = []
 
-        # TODO: Customize parsing logic for www.gov.uk/government/organisations/companies-house
-        # This is a template that should be adapted to the specific site
+        # Companies House search results are in <li> elements
+        result_items = soup.select('ul#results li, li.type-company')
 
-        # Look for common company/startup data patterns
-        for item in soup.select('[class*="company"], [class*="startup"], [class*="item"]'):
+        logger.info(f"Found {len(result_items)} results for '{search_query}'")
+
+        for item in result_items:
             try:
+                # Extract company name
+                name_elem = item.select_one('h3.heading-small a, a.govuk-link, h2 a')
+                if not name_elem:
+                    continue
+
+                company_name = name_elem.get_text(strip=True)
+                company_link = name_elem.get('href', '')
+
+                # Extract company number from link (format: /company/12345678)
+                company_number = company_link.split('/')[-1] if company_link else None
+
+                # Extract company status
+                status_elem = item.select_one('.company-status, [class*="status"]')
+                status = status_elem.get_text(strip=True) if status_elem else None
+
+                # Extract address
+                address_elem = item.select_one('.company-address, address, [class*="address"]')
+                address = address_elem.get_text(strip=True) if address_elem else None
+
+                # Extract incorporation date (if shown)
+                inc_date_elem = item.select_one('.company-incorporation-date, [class*="incorporation"]')
+                incorporation_date = inc_date_elem.get_text(strip=True) if inc_date_elem else None
+
                 data = {
-                    'source': 'companies_house',
-                    'url': url,
+                    'source': 'companies_house_uk',
+                    'search_query': search_query,
                     'scraped_at': datetime.utcnow().isoformat(),
-                    'title': self._extract_text(item, '[class*="title"], h1, h2, h3'),
-                    'description': self._extract_text(item, '[class*="description"], p'),
-                    'link': self._extract_link(item, url),
+                    'company_number': company_number,
+                    'company_name': company_name,
+                    'company_status': status,
+                    'registered_address': address,
+                    'incorporation_date': incorporation_date,
+                    'company_link': urljoin(self.BASE_URL, company_link) if company_link else None,
                 }
 
-                # Only add if we have meaningful data
-                if data.get('title') or data.get('description'):
-                    items.append(data)
+                # Remove None values
+                data = {k: v for k, v in data.items() if v is not None}
+                results.append(data)
+                logger.debug(f"Extracted: {company_name} ({company_number})")
 
             except Exception as e:
-                logger.warning(f"Error parsing item: {e}")
+                logger.warning(f"Error parsing search result: {e}")
                 continue
 
-        return items
+        return results
 
-    def _extract_text(self, element, selector: str) -> Optional[str]:
-        """Extract and clean text from element."""
-        try:
-            found = element.select_one(selector)
-            if found:
-                return found.get_text(strip=True)
-        except Exception:
-            pass
-        return None
-
-    def _extract_link(self, element, base_url: str) -> Optional[str]:
-        """Extract and normalize link from element."""
-        try:
-            link = element.select_one('a')
-            if link and link.get('href'):
-                return urljoin(base_url, link['href'])
-        except Exception:
-            pass
-        return None
-
-    async def crawl(self, start_url: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def search_company(self, company_name: str) -> List[Dict[str, Any]]:
         """
-        Main crawl method.
+        Search for a company by name.
 
         Args:
-            start_url: Starting URL (defaults to BASE_URL)
+            company_name: Company name to search
 
         Returns:
-            List of crawled data items
+            List of matching companies
         """
-        url = start_url or self.BASE_URL
+        # Encode search query
+        encoded_query = quote_plus(company_name)
+        search_url = f"{self.SEARCH_URL}?q={encoded_query}"
 
-        logger.info(f"Starting crawl from: {url}")
+        logger.info(f"Searching for: {company_name}")
 
-        html = await self.fetch(url)
+        html = await self.fetch(search_url)
         if html:
-            items = self.parse_page(html, url)
-            self.data.extend(items)
-            logger.info(f"Extracted {len(items)} items from {url}")
+            results = self.parse_search_results(html, company_name)
+            return results
 
+        return []
+
+    async def crawl(self, companies: List[str]) -> List[Dict[str, Any]]:
+        """
+        Main crawl method - searches for multiple companies.
+
+        Args:
+            companies: List of company names to search
+
+        Returns:
+            List of all found company data
+        """
+        logger.info(f"Starting crawl for {len(companies)} companies")
+
+        for i, company_name in enumerate(companies, 1):
+            logger.info(f"Processing {i}/{len(companies)}: {company_name}")
+
+            results = await self.search_company(company_name)
+            self.data.extend(results)
+
+            if results:
+                logger.info(f"Found {len(results)} results for '{company_name}'")
+            else:
+                logger.warning(f"No results found for '{company_name}'")
+
+        logger.info(f"Total companies collected: {len(self.data)}")
         return self.data
 
     def save_json(self, filename: Optional[str] = None) -> Path:
@@ -229,7 +266,7 @@ class CompaniesHouseCrawler:
         """
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"companies_house_{timestamp}.json"
+            filename = f"companies_{timestamp}.json"
 
         filepath = self.output_dir / filename
 
@@ -239,48 +276,39 @@ class CompaniesHouseCrawler:
         logger.info(f"Saved {len(self.data)} items to {filepath}")
         return filepath
 
-    def save_csv(self, filename: Optional[str] = None) -> Path:
-        """
-        Save data as CSV.
-
-        Args:
-            filename: Output filename (auto-generated if None)
-
-        Returns:
-            Path to saved file
-        """
-        import csv
-
-        if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"companies_house_{timestamp}.csv"
-
-        filepath = self.output_dir / filename
-
-        if not self.data:
-            logger.warning("No data to save")
-            return filepath
-
-        keys = self.data[0].keys()
-
-        with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=keys)
-            writer.writeheader()
-            writer.writerows(self.data)
-
-        logger.info(f"Saved {len(self.data)} items to {filepath}")
-        return filepath
-
 
 async def main():
     """Example usage of the crawler."""
-    async with CompaniesHouseCrawler(output_dir="data/companies_house") as crawler:
-        await crawler.crawl()
+    # Read companies from input file
+    input_file = Path("companies.txt")
+
+    if input_file.exists():
+        with open(input_file, 'r', encoding='utf-8') as f:
+            companies = [line.strip() for line in f if line.strip()]
+        logger.info(f"Loaded {len(companies)} companies from {input_file}")
+    else:
+        # Default list if no input file
+        companies = [
+            "HSBC Holdings",
+            "BP plc",
+            "Tesco",
+            "Barclays",
+            "Vodafone"
+        ]
+        logger.warning(f"{input_file} not found. Using default company list.")
+
+    async with CompaniesHouseCrawler(rate_limit=2.0) as crawler:
+        await crawler.crawl(companies)
 
         if crawler.data:
-            crawler.save_json()
-            crawler.save_csv()
-            print(f"Successfully crawled {len(crawler.data)} items")
+            json_file = crawler.save_json()
+
+            print(f"\n{'='*60}")
+            print(f"✓ Successfully crawled {len(crawler.data)} company records")
+            print(f"{'='*60}")
+            print(f"JSON output: {json_file}")
+            print(f"\nSample data (first item):")
+            print(json.dumps(crawler.data[0], indent=2))
         else:
             print("No data collected")
 
