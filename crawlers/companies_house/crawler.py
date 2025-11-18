@@ -205,15 +205,113 @@ class CompaniesHouseCrawler:
 
         return results
 
-    async def search_company(self, company_name: str) -> List[Dict[str, Any]]:
+    def parse_company_profile(self, html: str, company_url: str, search_query: str) -> Dict[str, Any]:
         """
-        Search for a company by name.
+        Parse company profile page to extract detailed information.
+
+        Args:
+            html: HTML content of company profile page
+            company_url: URL of the company profile
+            search_query: Original search query
+
+        Returns:
+            Dictionary with detailed company information
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        data = {
+            'source': 'companies_house_uk',
+            'search_query': search_query,
+            'scraped_at': datetime.utcnow().isoformat(),
+            'company_link': company_url,
+        }
+
+        # Extract company number from URL
+        company_number = company_url.split('/')[-1] if company_url else None
+        if company_number:
+            data['company_number'] = company_number
+
+        # Extract company name (main heading)
+        name_elem = soup.select_one('p.heading-xlarge, h1.heading-xlarge, #company-name')
+        if name_elem:
+            data['company_name'] = name_elem.get_text(strip=True)
+
+        # Extract all data from definition lists (dl elements)
+        # Companies House uses <dl> tags for key-value pairs
+        for dl in soup.find_all('dl'):
+            dt_elements = dl.find_all('dt')
+            dd_elements = dl.find_all('dd')
+
+            for dt, dd in zip(dt_elements, dd_elements):
+                key = dt.get_text(strip=True).lower().replace(' ', '_').replace('-', '_')
+                value = dd.get_text(strip=True)
+
+                # Map common fields
+                if 'company number' in key:
+                    data['company_number'] = value
+                elif 'company status' in key or 'status' == key:
+                    data['company_status'] = value
+                elif 'company type' in key or 'type' == key:
+                    data['company_type'] = value
+                elif 'incorporated on' in key or 'incorporation' in key:
+                    data['incorporation_date'] = value
+                elif 'registered office' in key or 'address' in key:
+                    data['registered_address'] = value
+                elif 'nature of business' in key or 'sic' in key:
+                    data['nature_of_business'] = value
+                elif 'accounts' in key:
+                    data['accounts_info'] = value
+                elif 'confirmation statement' in key:
+                    data['confirmation_statement'] = value
+                elif 'previous' in key and 'name' in key:
+                    data['previous_names'] = value
+                else:
+                    # Store any other fields with their original key
+                    data[key] = value
+
+        # Extract registered address (alternative selector)
+        if 'registered_address' not in data:
+            address_elem = soup.select_one('#content-container address, .address')
+            if address_elem:
+                data['registered_address'] = address_elem.get_text(strip=True)
+
+        # Extract company status (alternative selector)
+        if 'company_status' not in data:
+            status_elem = soup.select_one('.status, [class*="company-status"]')
+            if status_elem:
+                data['company_status'] = status_elem.get_text(strip=True)
+
+        logger.debug(f"Extracted profile data for: {data.get('company_name', 'Unknown')}")
+        return data
+
+    async def fetch_company_details(self, company_url: str, search_query: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch and parse detailed company information from profile page.
+
+        Args:
+            company_url: URL to company profile page
+            search_query: Original search query
+
+        Returns:
+            Dictionary with company details or None if failed
+        """
+        logger.info(f"Fetching company details from: {company_url}")
+
+        html = await self.fetch(company_url)
+        if html:
+            return self.parse_company_profile(html, company_url, search_query)
+
+        return None
+
+    async def search_company(self, company_name: str, fetch_details: bool = True) -> List[Dict[str, Any]]:
+        """
+        Search for a company by name and optionally fetch detailed info.
 
         Args:
             company_name: Company name to search
+            fetch_details: If True, fetch full details from company profile page
 
         Returns:
-            List of matching companies
+            List of matching companies with details
         """
         # Encode search query
         encoded_query = quote_plus(company_name)
@@ -222,11 +320,24 @@ class CompaniesHouseCrawler:
         logger.info(f"Searching for: {company_name}")
 
         html = await self.fetch(search_url)
-        if html:
-            results = self.parse_search_results(html, company_name)
-            return results
+        if not html:
+            return []
 
-        return []
+        # Get search results
+        results = self.parse_search_results(html, company_name)
+
+        # If fetch_details is True, get detailed info for first result
+        if fetch_details and results:
+            first_result = results[0]
+            company_url = first_result.get('company_link')
+
+            if company_url:
+                detailed_data = await self.fetch_company_details(company_url, company_name)
+                if detailed_data:
+                    # Return the detailed data instead of search result
+                    return [detailed_data]
+
+        return results
 
     async def crawl(self, companies: List[str]) -> List[Dict[str, Any]]:
         """

@@ -25,16 +25,24 @@ python3 crawler.py
 Results are saved to `data/companies_house/companies_TIMESTAMP.json`
 
 ## Output Format
+
+The crawler now fetches **detailed company information** from each company's profile page (Overview tab).
+
 Each company entry includes:
 - `source`: Always "companies_house_uk"
 - `search_query`: The search term used
 - `scraped_at`: ISO timestamp
+- `company_link`: Link to full company profile
 - `company_number`: UK company registration number
 - `company_name`: Official company name
 - `company_status`: Active, Dissolved, etc.
-- `registered_address`: Company registered address
+- `company_type`: Public limited company, Private limited, etc.
 - `incorporation_date`: Date company was incorporated
-- `company_link`: Link to full company profile
+- `registered_address`: Company registered address
+- `nature_of_business`: SIC codes and business description
+- `accounts_info`: Next accounts filing information
+- `confirmation_statement`: Next confirmation statement due date
+- Plus any other fields found on the Overview tab
 
 ### Example Output
 ```json
@@ -42,13 +50,17 @@ Each company entry includes:
   {
     "source": "companies_house_uk",
     "search_query": "HSBC Holdings",
-    "scraped_at": "2025-11-18T07:00:00.000000",
+    "scraped_at": "2025-11-18T11:00:00.000000",
+    "company_link": "https://find-and-update.company-information.service.gov.uk/company/00617987",
     "company_number": "00617987",
     "company_name": "HSBC HOLDINGS PLC",
     "company_status": "Active",
-    "registered_address": "8 Canada Square, London, E14 5HQ",
+    "company_type": "Public limited company",
     "incorporation_date": "27 July 1990",
-    "company_link": "https://find-and-update.company-information.service.gov.uk/company/00617987"
+    "registered_address": "8 Canada Square, London, E14 5HQ",
+    "nature_of_business": "64191 - Banks",
+    "accounts_info": "Next accounts made up to 31 December 2025 due by 30 September 2026",
+    "confirmation_statement": "Next statement date 31 December 2025 due by 14 January 2026"
   }
 ]
 ```
