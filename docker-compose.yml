@@ -1,0 +1,301 @@
+version: '3.8'
+
+services:
+  # General Data Collectors
+  harmonic_ai:
+    build:
+      context: ./crawlers/harmonic_ai
+      dockerfile: Dockerfile
+    container_name: crawler-harmonic-ai
+    volumes:
+      - ./data/harmonic_ai:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  crunchbase:
+    build:
+      context: ./crawlers/crunchbase
+      dockerfile: Dockerfile
+    container_name: crawler-crunchbase
+    volumes:
+      - ./data/crunchbase:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  startupstash:
+    build:
+      context: ./crawlers/startupstash
+      dockerfile: Dockerfile
+    container_name: crawler-startupstash
+    volumes:
+      - ./data/startupstash:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  growjo:
+    build:
+      context: ./crawlers/growjo
+      dockerfile: Dockerfile
+    container_name: crawler-growjo
+    volumes:
+      - ./data/growjo:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  betalist:
+    build:
+      context: ./crawlers/betalist
+      dockerfile: Dockerfile
+    container_name: crawler-betalist
+    volumes:
+      - ./data/betalist:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  angellist:
+    build:
+      context: ./crawlers/angellist
+      dockerfile: Dockerfile
+    container_name: crawler-angellist
+    volumes:
+      - ./data/angellist:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  # Government/Business Registries
+  infogreffe:
+    build:
+      context: ./crawlers/infogreffe
+      dockerfile: Dockerfile
+    container_name: crawler-infogreffe
+    volumes:
+      - ./data/infogreffe:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  companies_house:
+    build:
+      context: ./crawlers/companies_house
+      dockerfile: Dockerfile
+    container_name: crawler-companies-house
+    volumes:
+      - ./data/companies_house:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  opencorporates:
+    build:
+      context: ./crawlers/opencorporates
+      dockerfile: Dockerfile
+    container_name: crawler-opencorporates
+    volumes:
+      - ./data/opencorporates:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  sec_edgar:
+    build:
+      context: ./crawlers/sec_edgar
+      dockerfile: Dockerfile
+    container_name: crawler-sec-edgar
+    volumes:
+      - ./data/sec_edgar:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  sec_data:
+    build:
+      context: ./crawlers/sec_data
+      dockerfile: Dockerfile
+    container_name: crawler-sec-data
+    volumes:
+      - ./data/sec_data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  # Startup Databases & Directories
+  f6s:
+    build:
+      context: ./crawlers/f6s
+      dockerfile: Dockerfile
+    container_name: crawler-f6s
+    volumes:
+      - ./data/f6s:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  betapage:
+    build:
+      context: ./crawlers/betapage
+      dockerfile: Dockerfile
+    container_name: crawler-betapage
+    volumes:
+      - ./data/betapage:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  launched:
+    build:
+      context: ./crawlers/launched
+      dockerfile: Dockerfile
+    container_name: crawler-launched
+    volumes:
+      - ./data/launched:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  # Regional/MENA Specific
+  magnitt:
+    build:
+      context: ./crawlers/magnitt
+      dockerfile: Dockerfile
+    container_name: crawler-magnitt
+    volumes:
+      - ./data/magnitt:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  wamda:
+    build:
+      context: ./crawlers/wamda
+      dockerfile: Dockerfile
+    container_name: crawler-wamda
+    volumes:
+      - ./data/wamda:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  startupbahrain:
+    build:
+      context: ./crawlers/startupbahrain
+      dockerfile: Dockerfile
+    container_name: crawler-startupbahrain
+    volumes:
+      - ./data/startupbahrain:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  arabnet:
+    build:
+      context: ./crawlers/arabnet
+      dockerfile: Dockerfile
+    container_name: crawler-arabnet
+    volumes:
+      - ./data/arabnet:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  # Funding & Investment Data
+  wellfound:
+    build:
+      context: ./crawlers/wellfound
+      dockerfile: Dockerfile
+    container_name: crawler-wellfound
+    volumes:
+      - ./data/wellfound:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  ventureradar:
+    build:
+      context: ./crawlers/ventureradar
+      dockerfile: Dockerfile
+    container_name: crawler-ventureradar
+    volumes:
+      - ./data/ventureradar:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  # News & Content Platforms
+  techcrunch_startups:
+    build:
+      context: ./crawlers/techcrunch_startups
+      dockerfile: Dockerfile
+    container_name: crawler-techcrunch-startups
+    volumes:
+      - ./data/techcrunch_startups:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+  # Public Airtable Bases
+  airtable:
+    build:
+      context: ./crawlers/airtable
+      dockerfile: Dockerfile
+    container_name: crawler-airtable
+    volumes:
+      - ./data/airtable:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OUTPUT_DIR=/app/data
+    restart: unless-stopped
+
+volumes:
+  harmonic_ai_data:
+  crunchbase_data:
+  startupstash_data:
+  growjo_data:
+  betalist_data:
+  angellist_data:
+  infogreffe_data:
+  companies_house_data:
+  opencorporates_data:
+  sec_edgar_data:
+  sec_data_data:
+  f6s_data:
+  betapage_data:
+  launched_data:
+  magnitt_data:
+  wamda_data:
+  startupbahrain_data:
+  arabnet_data:
+  wellfound_data:
+  ventureradar_data:
+  techcrunch_startups_data:
+  airtable_data:
+
+networks:
+  default:
+    driver: bridge
