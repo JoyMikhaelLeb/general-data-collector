@@ -51,7 +51,8 @@ class UneedCrawler:
         output_dir: str = "data/uneed",
         rate_limit: float = 2.0,
         max_retries: int = 3,
-        timeout: int = 30
+        timeout: int = 30,
+        debug_html: bool = False
     ):
         """
         Initialize the crawler.
@@ -61,12 +62,17 @@ class UneedCrawler:
             rate_limit: Minimum seconds between requests
             max_retries: Maximum number of retry attempts
             timeout: Request timeout in seconds
+            debug_html: Save raw HTML files for debugging
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.debug_dir = self.output_dir / "debug"
+        if debug_html:
+            self.debug_dir.mkdir(parents=True, exist_ok=True)
         self.rate_limit = rate_limit
         self.max_retries = max_retries
         self.timeout = timeout
+        self.debug_html = debug_html
         self.session: Optional[aiohttp.ClientSession] = None
         self.data: List[Dict[str, Any]] = []
 
@@ -152,15 +158,30 @@ class UneedCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         tool_links = []
 
-        # Find all links containing /tool/
-        for link in soup.find_all('a', href=True):
-            href = link['href']
-            if '/tool/' in href:
-                full_url = urljoin(url, href)
-                if full_url not in tool_links:
-                    tool_links.append(full_url)
+        # Debug: Log total number of links found
+        all_links = soup.find_all('a', href=True)
+        logger.info(f"Total links found on page: {len(all_links)}")
 
-        logger.info(f"Found {len(tool_links)} tool links")
+        # Find all links containing /tool/ or /t/
+        for link in all_links:
+            href = link['href']
+            # Check for various possible patterns
+            if '/tool/' in href or href.startswith('/t/'):
+                full_url = urljoin(url, href)
+                # Remove duplicates and fragments
+                clean_url = full_url.split('#')[0].split('?')[0]
+                if clean_url not in tool_links:
+                    tool_links.append(clean_url)
+                    logger.debug(f"Found tool link: {clean_url}")
+
+        logger.info(f"Found {len(tool_links)} unique tool links")
+
+        # If no tools found, log some sample links for debugging
+        if len(tool_links) == 0:
+            logger.warning("No tool links found. Sample links from page:")
+            for i, link in enumerate(all_links[:10]):
+                logger.warning(f"  Sample link {i+1}: {link.get('href', 'NO HREF')}")
+
         return tool_links
 
     def parse_tool_page(self, html: str, tool_url: str) -> Dict[str, Any]:
@@ -181,72 +202,181 @@ class UneedCrawler:
             'tool_url': tool_url,
         }
 
-        # Extract tool name (h1 or main heading)
-        name_elem = soup.select_one('h1, .tool-name, [class*="title"]')
-        if name_elem:
-            data['tool_name'] = name_elem.get_text(strip=True)
+        # Extract tool name (h1 or main heading) - try multiple selectors
+        name_selectors = [
+            'h1',
+            '[class*="tool"] h1',
+            '[class*="product"] h1',
+            '[class*="title"]',
+            '.tool-name',
+            '.product-name',
+            '[data-testid*="title"]',
+            '[data-testid*="name"]'
+        ]
+        for selector in name_selectors:
+            name_elem = soup.select_one(selector)
+            if name_elem:
+                name_text = name_elem.get_text(strip=True)
+                if name_text and len(name_text) > 0:
+                    data['tool_name'] = name_text
+                    logger.debug(f"Found tool name: {name_text}")
+                    break
 
-        # Extract overview/description
-        # Try multiple possible selectors
-        overview_elem = soup.select_one('.overview, .description, [class*="description"], p')
-        if overview_elem:
-            data['overview'] = overview_elem.get_text(strip=True)
+        # Extract overview/description - try multiple approaches
+        description_selectors = [
+            '[class*="description"]',
+            '[class*="overview"]',
+            '[class*="about"]',
+            '[class*="summary"]',
+            'meta[name="description"]',
+            'meta[property="og:description"]',
+            '.lead',
+            'article p',
+            'main p'
+        ]
+        for selector in description_selectors:
+            if selector.startswith('meta'):
+                desc_elem = soup.select_one(selector)
+                if desc_elem and desc_elem.get('content'):
+                    data['overview'] = desc_elem['content']
+                    logger.debug(f"Found description from meta: {desc_elem['content'][:50]}...")
+                    break
+            else:
+                desc_elem = soup.select_one(selector)
+                if desc_elem:
+                    desc_text = desc_elem.get_text(strip=True)
+                    if desc_text and len(desc_text) > 20:  # Avoid short snippets
+                        data['overview'] = desc_text
+                        logger.debug(f"Found description: {desc_text[:50]}...")
+                        break
 
-        # Extract website URL
-        website_elem = soup.select_one('a[href*="http"]:not([href*="uneed.best"])')
-        if website_elem:
-            data['website'] = website_elem.get('href')
+        # Extract website URL - look for external links
+        website_selectors = [
+            'a[class*="website"]',
+            'a[class*="visit"]',
+            'a[class*="external"]',
+            'a[href*="http"]:not([href*="uneed.best"]):not([href*="twitter"]):not([href*="linkedin"]):not([href*="facebook"]):not([href*="instagram"])'
+        ]
+        for selector in website_selectors:
+            website_elem = soup.select_one(selector)
+            if website_elem and website_elem.get('href'):
+                href = website_elem['href']
+                # Filter out social media and uneed.best links
+                if not any(domain in href for domain in ['twitter.com', 'x.com', 'linkedin.com', 'facebook.com', 'instagram.com', 'uneed.best', 'youtube.com']):
+                    data['website'] = href
+                    logger.debug(f"Found website: {href}")
+                    break
 
-        # Extract publisher information
-        publisher_elem = soup.select_one('.publisher, [class*="publisher"], [class*="maker"]')
-        if publisher_elem:
-            # Publisher name
-            publisher_name = publisher_elem.get_text(strip=True)
-            if publisher_name:
-                data['publisher_name'] = publisher_name
+        # Extract publisher/maker information
+        publisher_selectors = [
+            '[class*="publisher"]',
+            '[class*="maker"]',
+            '[class*="creator"]',
+            '[class*="author"]',
+            '[class*="submitter"]',
+            'a[href*="/user/"]',
+            'a[href*="/profile/"]'
+        ]
+        for selector in publisher_selectors:
+            publisher_elem = soup.select_one(selector)
+            if publisher_elem:
+                publisher_name = publisher_elem.get_text(strip=True)
+                if publisher_name and len(publisher_name) > 0:
+                    data['publisher_name'] = publisher_name
+                    logger.debug(f"Found publisher: {publisher_name}")
 
-            # Publisher link
-            publisher_link_elem = publisher_elem.find('a', href=True)
-            if publisher_link_elem:
-                data['publisher_link'] = urljoin(tool_url, publisher_link_elem['href'])
+                    # Try to find publisher link
+                    if publisher_elem.name == 'a':
+                        data['publisher_link'] = urljoin(tool_url, publisher_elem.get('href', ''))
+                    else:
+                        publisher_link_elem = publisher_elem.find('a', href=True)
+                        if publisher_link_elem:
+                            data['publisher_link'] = urljoin(tool_url, publisher_link_elem['href'])
+                    break
 
         # Extract launch date
-        date_elem = soup.select_one('.launch-date, [class*="date"], time')
-        if date_elem:
-            data['launch_date'] = date_elem.get_text(strip=True)
-            # Also try datetime attribute
-            if date_elem.get('datetime'):
-                data['launch_date'] = date_elem['datetime']
+        date_selectors = [
+            'time',
+            '[class*="date"]',
+            '[class*="launch"]',
+            '[datetime]'
+        ]
+        for selector in date_selectors:
+            date_elem = soup.select_one(selector)
+            if date_elem:
+                # Try datetime attribute first
+                if date_elem.get('datetime'):
+                    data['launch_date'] = date_elem['datetime']
+                    logger.debug(f"Found launch date: {date_elem['datetime']}")
+                    break
+                else:
+                    date_text = date_elem.get_text(strip=True)
+                    if date_text:
+                        data['launch_date'] = date_text
+                        logger.debug(f"Found launch date: {date_text}")
+                        break
 
-        # Extract category
-        category_elem = soup.select_one('.category, [class*="category"], .tag, [class*="tag"]')
-        if category_elem:
-            data['category'] = category_elem.get_text(strip=True)
+        # Extract category/tags
+        category_selectors = [
+            '[class*="category"]',
+            '[class*="tag"]',
+            '[class*="label"]',
+            'a[href*="/category/"]',
+            'a[href*="/tag/"]'
+        ]
+        categories = []
+        for selector in category_selectors:
+            for cat_elem in soup.select(selector):
+                cat_text = cat_elem.get_text(strip=True)
+                if cat_text and cat_text not in categories:
+                    categories.append(cat_text)
+
+        if categories:
+            data['category'] = ', '.join(categories) if len(categories) > 1 else categories[0]
+            logger.debug(f"Found categories: {data['category']}")
 
         # Extract pricing
-        pricing_elem = soup.select_one('.pricing, [class*="price"], [class*="pricing"]')
-        if pricing_elem:
-            data['pricing'] = pricing_elem.get_text(strip=True)
+        pricing_selectors = [
+            '[class*="price"]',
+            '[class*="pricing"]',
+            '[class*="cost"]',
+            '[class*="plan"]'
+        ]
+        for selector in pricing_selectors:
+            pricing_elem = soup.select_one(selector)
+            if pricing_elem:
+                pricing_text = pricing_elem.get_text(strip=True)
+                if pricing_text:
+                    data['pricing'] = pricing_text
+                    logger.debug(f"Found pricing: {pricing_text}")
+                    break
 
         # Extract social links
         socials = {}
         for link in soup.find_all('a', href=True):
             href = link['href']
             if 'twitter.com' in href or 'x.com' in href:
-                socials['twitter'] = href
+                if 'twitter' not in socials:
+                    socials['twitter'] = href
             elif 'linkedin.com' in href:
-                socials['linkedin'] = href
+                if 'linkedin' not in socials:
+                    socials['linkedin'] = href
             elif 'facebook.com' in href:
-                socials['facebook'] = href
+                if 'facebook' not in socials:
+                    socials['facebook'] = href
             elif 'instagram.com' in href:
-                socials['instagram'] = href
+                if 'instagram' not in socials:
+                    socials['instagram'] = href
             elif 'github.com' in href:
-                socials['github'] = href
-            elif 'youtube.com' in href:
-                socials['youtube'] = href
+                if 'github' not in socials:
+                    socials['github'] = href
+            elif 'youtube.com' in href or 'youtu.be' in href:
+                if 'youtube' not in socials:
+                    socials['youtube'] = href
 
         if socials:
             data['socials'] = socials
+            logger.debug(f"Found {len(socials)} social links")
 
         # Extract "For Sale" status
         for_sale_elem = soup.select_one('[class*="for-sale"], [class*="forsale"]')
@@ -269,10 +399,17 @@ class UneedCrawler:
                 if key and value and key not in data:
                     data[key] = value
 
-        # Remove None values
-        data = {k: v for k, v in data.items() if v is not None}
+        # Remove None and empty values
+        data = {k: v for k, v in data.items() if v is not None and v != ''}
 
-        logger.debug(f"Extracted tool: {data.get('tool_name', 'Unknown')}")
+        # Log what fields were extracted
+        extracted_fields = [k for k in data.keys() if k not in ['source', 'scraped_at', 'tool_url']]
+        logger.info(f"Extracted {len(extracted_fields)} fields for tool: {data.get('tool_name', 'Unknown')} - Fields: {', '.join(extracted_fields)}")
+
+        # Warn if we got minimal data
+        if len(extracted_fields) < 2:
+            logger.warning(f"Very little data extracted for {tool_url}. Only got: {extracted_fields}")
+
         return data
 
     async def fetch_tool_details(self, tool_url: str) -> Optional[Dict[str, Any]]:
@@ -289,6 +426,14 @@ class UneedCrawler:
 
         html = await self.fetch(tool_url)
         if html:
+            # Save tool page HTML for debugging (first 3 only to avoid clutter)
+            if self.debug_html and len(self.data) < 3:
+                tool_slug = tool_url.split('/')[-1]
+                tool_page_file = self.debug_dir / f"tool_{tool_slug}.html"
+                with open(tool_page_file, 'w', encoding='utf-8') as f:
+                    f.write(html)
+                logger.info(f"Saved tool page HTML to: {tool_page_file}")
+
             return self.parse_tool_page(html, tool_url)
 
         return None
@@ -313,8 +458,19 @@ class UneedCrawler:
             logger.error("Failed to fetch main page")
             return []
 
+        # Save main page HTML for debugging
+        if self.debug_html:
+            main_page_file = self.debug_dir / "main_page.html"
+            with open(main_page_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+            logger.info(f"Saved main page HTML to: {main_page_file}")
+
         # Extract tool links
         tool_links = self.parse_main_page(html, url)
+
+        if not tool_links:
+            logger.error("No tool links found on main page. Check HTML structure or selectors.")
+            return []
 
         # Fetch details for each tool
         for i, tool_url in enumerate(tool_links, 1):
@@ -354,7 +510,18 @@ class UneedCrawler:
 
 async def main():
     """Example usage of the crawler."""
-    async with UneedCrawler(rate_limit=2.0) as crawler:
+    # Enable DEBUG logging for detailed output
+    import sys
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler('data/uneed/crawler.log', mode='w')
+        ]
+    )
+
+    async with UneedCrawler(rate_limit=2.0, debug_html=True) as crawler:
         await crawler.crawl()
 
         if crawler.data:
@@ -364,10 +531,16 @@ async def main():
             print(f"✓ Successfully crawled {len(crawler.data)} tools")
             print(f"{'='*60}")
             print(f"JSON output: {json_file}")
+            print(f"Log file: data/uneed/crawler.log")
+            print(f"Debug HTML: data/uneed/debug/")
             print(f"\nSample data (first item):")
             print(json.dumps(crawler.data[0], indent=2))
         else:
+            print("\n" + "="*60)
             print("No data collected")
+            print("="*60)
+            print("\nCheck the log file for details: data/uneed/crawler.log")
+            print("Check debug HTML files in: data/uneed/debug/")
 
 
 if __name__ == "__main__":

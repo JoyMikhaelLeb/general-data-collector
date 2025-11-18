@@ -91,6 +91,24 @@ asyncio.run(main())
 - **JSON Output**: Clean, structured data output
 - **Social Media Links**: Extracts Twitter, LinkedIn, GitHub, etc.
 
+## Debugging Features (NEW!)
+
+The crawler now includes enhanced debugging capabilities:
+
+```python
+async with UneedCrawler(
+    debug_html=True,  # Save HTML files for inspection
+    rate_limit=2.0
+) as crawler:
+    await crawler.crawl()
+```
+
+Debug output includes:
+- **Log file**: `data/uneed/crawler.log` with detailed execution trace
+- **HTML snapshots**: `data/uneed/debug/main_page.html` and sample tool pages
+- **Field extraction info**: Shows exactly which fields were found for each tool
+- **Link discovery**: Shows all links found and which ones match tool patterns
+
 ## Troubleshooting
 
 ### Network Issues
@@ -98,11 +116,14 @@ If you see connection errors:
 - Check your internet connection
 - Try increasing the timeout: `UneedCrawler(timeout=60)`
 
-### No Data Collected
+### No Data Collected (0 results)
 If the crawler returns no results:
-- The website structure may have changed
-- Check the logs for parsing errors
-- The selectors may need adjustment
+- **Enable debug mode**: Use `debug_html=True` to save HTML files
+- **Check the logs**: Review `data/uneed/crawler.log` for warnings
+- **Inspect HTML**: Open debug HTML files to see actual structure
+- **See detailed guide**: Read [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for step-by-step diagnosis
+
+The website structure may have changed and selectors may need adjustment.
 
 ### Rate Limiting
 If you get HTTP 429 errors:
