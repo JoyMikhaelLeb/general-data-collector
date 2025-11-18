@@ -10,52 +10,59 @@ from pathlib import Path
 # Sample data showing expected structure
 sample_data = [
     {
-        "source": "uneed_best",
-        "scraped_at": datetime.utcnow().isoformat(),
-        "tool_url": "https://www.uneed.best/tool/example-tool-1",
         "tool_name": "AI Design Assistant",
-        "overview": "Revolutionary AI-powered design tool that helps you create stunning visuals in minutes",
-        "website": "https://example-tool.com",
-        "publisher_name": "John Smith",
-        "publisher_link": "https://www.uneed.best/user/johnsmith",
-        "launch_date": "2025-11-18",
-        "category": "Design Tools",
-        "pricing": "Free with premium options",
-        "socials": {
-            "twitter": "https://twitter.com/exampletool",
-            "linkedin": "https://linkedin.com/company/exampletool"
-        },
-        "for_sale": False
-    },
-    {
-        "source": "uneed_best",
-        "scraped_at": datetime.utcnow().isoformat(),
-        "tool_url": "https://www.uneed.best/tool/example-tool-2",
-        "tool_name": "ProductivityMax",
-        "overview": "All-in-one productivity suite for remote teams",
-        "website": "https://productivitymax.io",
-        "publisher_name": "Sarah Johnson",
-        "publisher_link": "https://www.uneed.best/user/sarahj",
-        "launch_date": "2025-11-17",
-        "category": "Productivity",
-        "pricing": "$29/month",
-        "socials": {
-            "twitter": "https://twitter.com/productivitymax",
-            "github": "https://github.com/productivitymax"
+        "tool_link": "https://www.uneed.best/tool/example-tool-1",
+        "tool_info": {
+            "overview": "Revolutionary AI-powered design tool that helps you create stunning visuals in minutes",
+            "publisher_name": "John Smith",
+            "publisher_link": "https://www.uneed.best/user/johnsmith",
+            "general_info": {
+                "launch_date": "2025-11-18",
+                "categories": ["Design Tools", "AI"],
+                "pricing": "Free with premium options",
+                "website": "https://example-tool.com",
+                "socials": {
+                    "twitter": "https://twitter.com/exampletool",
+                    "linkedin": "https://linkedin.com/company/exampletool"
+                },
+                "for_sale": False
+            }
         }
     },
     {
-        "source": "uneed_best",
-        "scraped_at": datetime.utcnow().isoformat(),
-        "tool_url": "https://www.uneed.best/tool/example-tool-3",
+        "tool_name": "ProductivityMax",
+        "tool_link": "https://www.uneed.best/tool/example-tool-2",
+        "tool_info": {
+            "overview": "All-in-one productivity suite for remote teams",
+            "publisher_name": "Sarah Johnson",
+            "publisher_link": "https://www.uneed.best/user/sarahj",
+            "general_info": {
+                "launch_date": "2025-11-17",
+                "categories": ["Productivity"],
+                "pricing": "$29/month",
+                "website": "https://productivitymax.io",
+                "socials": {
+                    "twitter": "https://twitter.com/productivitymax",
+                    "github": "https://github.com/productivitymax"
+                }
+            }
+        }
+    },
+    {
         "tool_name": "CodeHelper AI",
-        "overview": "AI coding assistant that writes clean, production-ready code",
-        "website": "https://codehelper.dev",
-        "publisher_name": "DevTeam Inc",
-        "launch_date": "2025-11-16",
-        "category": "Developer Tools",
-        "pricing": "Free",
-        "for_sale": True
+        "tool_link": "https://www.uneed.best/tool/example-tool-3",
+        "tool_info": {
+            "overview": "AI coding assistant that writes clean, production-ready code",
+            "publisher_name": "DevTeam Inc",
+            "publisher_link": "https://www.uneed.best/user/devteam",
+            "general_info": {
+                "launch_date": "2025-11-16",
+                "categories": ["Developer Tools"],
+                "pricing": "Free",
+                "website": "https://codehelper.dev",
+                "for_sale": True
+            }
+        }
     }
 ]
 
@@ -64,8 +71,9 @@ def main():
     output_dir = Path("data/uneed")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"uneed_demo_{timestamp}.json"
+    # Use the new date format: uneed-DDMMYYYY.json
+    date_str = datetime.now().strftime("%d%m%Y")
+    filename = f"uneed-{date_str}-demo.json"
     filepath = output_dir / filename
 
     with open(filepath, 'w', encoding='utf-8') as f:

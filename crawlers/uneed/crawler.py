@@ -140,7 +140,7 @@ class UneedCrawler:
 
     def parse_main_page(self, html: str, url: str) -> List[str]:
         """
-        Parse main page and extract tool links.
+        Parse main page and extract tool links from div[@class='pb-4 w-full'].
 
         Args:
             html: HTML content
@@ -152,8 +152,19 @@ class UneedCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         tool_links = []
 
-        # Find all links containing /tool/
-        for link in soup.find_all('a', href=True):
+        # Find the div with class 'pb-4 w-full' that contains all launches of today
+        launches_div = soup.find('div', class_='pb-4 w-full')
+
+        if not launches_div:
+            logger.warning("Could not find div[@class='pb-4 w-full'], falling back to all links")
+            # Fallback to searching entire page
+            container = soup
+        else:
+            logger.info("Found launches container div[@class='pb-4 w-full']")
+            container = launches_div
+
+        # Find all links containing /tool/ within the container
+        for link in container.find_all('a', href=True):
             href = link['href']
             if '/tool/' in href:
                 full_url = urljoin(url, href)
@@ -172,13 +183,30 @@ class UneedCrawler:
             tool_url: URL of the tool page
 
         Returns:
-            Dictionary with tool information
+            Dictionary with tool information in the format:
+            {
+                "tool_name": "...",
+                "tool_link": "uneed.com/tool/...",
+                "tool_info": {
+                    "overview": "...",
+                    "publisher_name": "...",
+                    "publisher_link": "...",
+                    "general_info": {...}
+                }
+            }
         """
         soup = BeautifulSoup(html, 'html.parser')
+
+        # Initialize structured data
         data = {
-            'source': 'uneed_best',
-            'scraped_at': datetime.utcnow().isoformat(),
-            'tool_url': tool_url,
+            'tool_name': None,
+            'tool_link': tool_url,
+            'tool_info': {
+                'overview': None,
+                'publisher_name': None,
+                'publisher_link': None,
+                'general_info': {}
+            }
         }
 
         # Extract tool name (h1 or main heading)
@@ -187,46 +215,87 @@ class UneedCrawler:
             data['tool_name'] = name_elem.get_text(strip=True)
 
         # Extract overview/description
-        # Try multiple possible selectors
-        overview_elem = soup.select_one('.overview, .description, [class*="description"], p')
+        overview_elem = soup.select_one('.overview, .description, [class*="description"]')
+        if not overview_elem:
+            # Try to find the first substantial paragraph
+            paragraphs = soup.find_all('p')
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if len(text) > 50:  # Substantial text
+                    overview_elem = p
+                    break
         if overview_elem:
-            data['overview'] = overview_elem.get_text(strip=True)
+            data['tool_info']['overview'] = overview_elem.get_text(strip=True)
 
-        # Extract website URL
-        website_elem = soup.select_one('a[href*="http"]:not([href*="uneed.best"])')
-        if website_elem:
-            data['website'] = website_elem.get('href')
+        # Extract publisher information from publisher box
+        # Try various selectors for publisher section
+        publisher_box = soup.select_one('.publisher, [class*="publisher"], [class*="maker"], [class*="creator"]')
 
-        # Extract publisher information
-        publisher_elem = soup.select_one('.publisher, [class*="publisher"], [class*="maker"]')
-        if publisher_elem:
+        if publisher_box:
             # Publisher name
-            publisher_name = publisher_elem.get_text(strip=True)
-            if publisher_name:
-                data['publisher_name'] = publisher_name
+            publisher_name_elem = publisher_box.select_one('h2, h3, .name, [class*="name"]')
+            if not publisher_name_elem:
+                # Try to get the first text content
+                publisher_name_elem = publisher_box
+
+            if publisher_name_elem:
+                publisher_name = publisher_name_elem.get_text(strip=True)
+                if publisher_name:
+                    data['tool_info']['publisher_name'] = publisher_name
 
             # Publisher link
-            publisher_link_elem = publisher_elem.find('a', href=True)
+            publisher_link_elem = publisher_box.find('a', href=True)
             if publisher_link_elem:
-                data['publisher_link'] = urljoin(tool_url, publisher_link_elem['href'])
+                data['tool_info']['publisher_link'] = urljoin(self.BASE_URL, publisher_link_elem['href'])
 
-        # Extract launch date
+            # Extract general info from publisher box (all text content)
+            # Get all dl/dt/dd elements if they exist
+            for dl in publisher_box.find_all('dl'):
+                dt_elements = dl.find_all('dt')
+                dd_elements = dl.find_all('dd')
+
+                for dt, dd in zip(dt_elements, dd_elements):
+                    key = dt.get_text(strip=True)
+                    value = dd.get_text(strip=True)
+                    if key and value:
+                        data['tool_info']['general_info'][key] = value
+
+        # If no publisher box found, try to extract from page structure
+        if not data['tool_info']['publisher_name']:
+            # Look for maker/creator links
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                text = link.get_text(strip=True)
+                if '/maker/' in href or '/creator/' in href or '/publisher/' in href:
+                    data['tool_info']['publisher_name'] = text
+                    data['tool_info']['publisher_link'] = urljoin(self.BASE_URL, href)
+                    break
+
+        # Extract additional general info from the page
+        # Launch date
         date_elem = soup.select_one('.launch-date, [class*="date"], time')
         if date_elem:
-            data['launch_date'] = date_elem.get_text(strip=True)
-            # Also try datetime attribute
+            date_text = date_elem.get_text(strip=True)
             if date_elem.get('datetime'):
-                data['launch_date'] = date_elem['datetime']
+                date_text = date_elem['datetime']
+            data['tool_info']['general_info']['launch_date'] = date_text
 
-        # Extract category
-        category_elem = soup.select_one('.category, [class*="category"], .tag, [class*="tag"]')
-        if category_elem:
-            data['category'] = category_elem.get_text(strip=True)
+        # Category/Tags
+        category_elems = soup.select('.category, [class*="category"], .tag, [class*="tag"]')
+        if category_elems:
+            categories = [elem.get_text(strip=True) for elem in category_elems if elem.get_text(strip=True)]
+            if categories:
+                data['tool_info']['general_info']['categories'] = categories
 
-        # Extract pricing
+        # Pricing
         pricing_elem = soup.select_one('.pricing, [class*="price"], [class*="pricing"]')
         if pricing_elem:
-            data['pricing'] = pricing_elem.get_text(strip=True)
+            data['tool_info']['general_info']['pricing'] = pricing_elem.get_text(strip=True)
+
+        # Website URL
+        website_elem = soup.select_one('a[href*="http"]:not([href*="uneed.best"])')
+        if website_elem:
+            data['tool_info']['general_info']['website'] = website_elem.get('href')
 
         # Extract social links
         socials = {}
@@ -246,31 +315,18 @@ class UneedCrawler:
                 socials['youtube'] = href
 
         if socials:
-            data['socials'] = socials
+            data['tool_info']['general_info']['socials'] = socials
 
         # Extract "For Sale" status
         for_sale_elem = soup.select_one('[class*="for-sale"], [class*="forsale"]')
         if for_sale_elem:
-            data['for_sale'] = for_sale_elem.get_text(strip=True)
-        else:
-            # Check if text "for sale" appears anywhere
-            if 'for sale' in html.lower():
-                data['for_sale'] = True
+            data['tool_info']['general_info']['for_sale'] = for_sale_elem.get_text(strip=True)
+        elif 'for sale' in html.lower():
+            data['tool_info']['general_info']['for_sale'] = True
 
-        # Try to extract any additional metadata from dl/dt/dd elements
-        for dl in soup.find_all('dl'):
-            dt_elements = dl.find_all('dt')
-            dd_elements = dl.find_all('dd')
-
-            for dt, dd in zip(dt_elements, dd_elements):
-                key = dt.get_text(strip=True).lower().replace(' ', '_').replace('-', '_')
-                value = dd.get_text(strip=True)
-
-                if key and value and key not in data:
-                    data[key] = value
-
-        # Remove None values
-        data = {k: v for k, v in data.items() if v is not None}
+        # Clean up empty general_info if no data was collected
+        if not data['tool_info']['general_info']:
+            data['tool_info']['general_info'] = {}
 
         logger.debug(f"Extracted tool: {data.get('tool_name', 'Unknown')}")
         return data
@@ -335,13 +391,15 @@ class UneedCrawler:
 
         Args:
             filename: Output filename (auto-generated if None)
+                     Default format: uneed-DDMMYYYY.json
 
         Returns:
             Path to saved file
         """
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"uneed_{timestamp}.json"
+            # Format: uneed-DDMMYYYY.json (e.g., uneed-18112025.json)
+            date_str = datetime.now().strftime("%d%m%Y")
+            filename = f"uneed-{date_str}.json"
 
         filepath = self.output_dir / filename
 
