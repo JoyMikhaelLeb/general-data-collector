@@ -162,11 +162,32 @@ class UneedCrawler:
         # XPath: //a[@class='flex relative items-center py-4 w-full group']
         # Structure: <a href="/tool/email-checker" class="flex relative items-center py-4 w-full group">
 
-        # Find all anchor tags with the specific class that contains tool links
-        tool_links_elements = soup.find_all('a', class_='flex relative items-center py-4 w-full group')
-        logger.info(f"Found {len(tool_links_elements)} anchor tags with tool link class")
+        # Method 1: Try exact class match (as a list - more reliable in BeautifulSoup)
+        tool_links_elements = soup.find_all('a', class_=['flex', 'relative', 'items-center', 'py-4', 'w-full', 'group'])
+        logger.info(f"Method 1 (exact class list): Found {len(tool_links_elements)} anchor tags")
 
-        # Extract hrefs from each link
+        # Method 2: If no results, try finding anchors and check if they have the required classes
+        if not tool_links_elements:
+            logger.warning("Method 1 found nothing. Trying Method 2: find anchors with key classes...")
+            all_anchors = soup.find_all('a', href=True)
+
+            for anchor in all_anchors:
+                classes = anchor.get('class', [])
+                # Check if anchor has the key identifying classes
+                if 'group' in classes and 'relative' in classes and 'w-full' in classes:
+                    href = anchor.get('href', '')
+                    if '/tool/' in href:
+                        tool_links_elements.append(anchor)
+
+            logger.info(f"Method 2 (flexible class match): Found {len(tool_links_elements)} anchor tags")
+
+        # Method 3: If still no results, just find any link with /tool/
+        if not tool_links_elements:
+            logger.warning("Method 2 found nothing. Trying Method 3: any link with /tool/...")
+            tool_links_elements = soup.find_all('a', href=lambda x: x and '/tool/' in x)
+            logger.info(f"Method 3 (any /tool/ link): Found {len(tool_links_elements)} links")
+
+        # Extract hrefs from found links
         for link in tool_links_elements:
             href = link.get('href')
 
@@ -183,20 +204,26 @@ class UneedCrawler:
                     tool_links.append(clean_url)
                     logger.debug(f"Found tool link: {clean_url}")
 
-        logger.info(f"Found {len(tool_links)} unique tool links")
+        logger.info(f"✓ Found {len(tool_links)} unique tool links total")
 
-        # If no tools found, try fallback and log debugging info
+        # If no tools found, log extensive debugging info
         if len(tool_links) == 0:
-            logger.warning("No tool links found with specific class. Trying fallback...")
+            logger.error("="*60)
+            logger.error("NO TOOL LINKS FOUND - DEBUGGING INFO")
+            logger.error("="*60)
 
-            # Fallback: try to find any links with /tool/ in href
-            all_tool_links = soup.find_all('a', href=lambda x: x and '/tool/' in x)
-            logger.warning(f"Fallback found {len(all_tool_links)} links containing '/tool/'")
+            # Show sample of all anchors
+            all_anchors = soup.find_all('a', href=True, limit=10)
+            logger.error(f"Total anchors on page: {len(soup.find_all('a', href=True))}")
+            logger.error("Sample of first 10 anchors:")
 
-            for link in all_tool_links[:10]:  # Limit to first 10 for logging
-                href = link.get('href')
-                classes = link.get('class', [])
-                logger.warning(f"  Found: {href} with classes: {' '.join(classes)}")
+            for i, anchor in enumerate(all_anchors, 1):
+                href = anchor.get('href', 'NO HREF')
+                classes = ' '.join(anchor.get('class', []))
+                logger.error(f"  [{i}] href={href}")
+                logger.error(f"      classes={classes[:100]}")
+
+            logger.error("="*60)
 
         return tool_links
 
