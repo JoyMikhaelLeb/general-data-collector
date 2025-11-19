@@ -191,7 +191,7 @@ class UneedBrowserCrawler:
         """
         Parse tool detail page and extract information.
 
-        Uses the same parsing logic as the original crawler.
+        Extracts from the rendered HTML structure with specific selectors.
         """
         soup = BeautifulSoup(html, 'html.parser')
         data = {
@@ -200,18 +200,121 @@ class UneedBrowserCrawler:
             'tool_url': tool_url,
         }
 
-        # Extract tool name
+        # Extract tool name from h1
         name_elem = soup.select_one('h1')
         if name_elem:
             data['tool_name'] = name_elem.get_text(strip=True)
+            logger.debug(f"Found tool name: {data['tool_name']}")
 
         # Extract description from meta tag
         desc_elem = soup.select_one('meta[property="og:description"]')
         if desc_elem:
             data['overview'] = desc_elem.get('content', '')
+            logger.debug(f"Found overview: {data['overview'][:50]}...")
 
-        # Extract other fields (simplified for now)
-        logger.debug(f"Parsed tool: {data.get('tool_name', 'Unknown')}")
+        # Extract publisher info from: <a href="/profile/...">
+        publisher_link = soup.select_one('a[href^="/profile/"]')
+        if publisher_link:
+            data['publisher_name'] = publisher_link.get_text(strip=True)
+            data['publisher_link'] = urljoin(tool_url, publisher_link.get('href', ''))
+            logger.debug(f"Found publisher: {data['publisher_name']}")
+
+        # Extract website URL from "Visit website" button
+        # Look for link with "Visit website" text and external URL
+        visit_links = soup.find_all('a', href=True, rel='noopener', target='_blank')
+        for link in visit_links:
+            href = link.get('href', '')
+            text = link.get_text(strip=True)
+            if 'visit website' in text.lower() and 'http' in href and 'uneed.best' not in href:
+                # Remove ref parameters
+                clean_url = href.split('?')[0]
+                data['website'] = clean_url
+                logger.debug(f"Found website: {clean_url}")
+                break
+
+        # Extract fields from the info card list items
+        # Structure: <li><p>Launch Date</p>...<span>2025-11-19</span></li>
+        list_items = soup.find_all('li', class_='flex gap-3 items-center py-1')
+
+        for li in list_items:
+            # Get the label (first <p> element)
+            label_elem = li.find('p', class_=lambda x: x and 'text-xs' in x and 'font-medium' in x)
+            if not label_elem:
+                continue
+
+            label = label_elem.get_text(strip=True).lower()
+
+            # Extract Launch Date
+            if 'launch date' in label:
+                date_span = li.find('span', class_='font-medium')
+                if date_span:
+                    data['launch_date'] = date_span.get_text(strip=True)
+                    logger.debug(f"Found launch date: {data['launch_date']}")
+
+            # Extract Category
+            elif 'category' in label:
+                category_link = li.find('a', href=True)
+                if category_link:
+                    data['category'] = category_link.get_text(strip=True)
+                    logger.debug(f"Found category: {data['category']}")
+
+            # Extract Pricing
+            elif 'pricing' in label:
+                pricing_span = li.find('span', class_=lambda x: x and 'text-xs' in x)
+                if pricing_span:
+                    data['pricing'] = pricing_span.get_text(strip=True)
+                    logger.debug(f"Found pricing: {data['pricing']}")
+
+            # Extract For Sale status
+            elif 'for sale' in label:
+                for_sale_span = li.find('span', class_='text-medium')
+                if for_sale_span:
+                    data['for_sale'] = for_sale_span.get_text(strip=True)
+                    logger.debug(f"Found for sale: {data['for_sale']}")
+
+            # Extract Socials
+            elif 'socials' in label:
+                socials = {}
+                social_links = li.find_all('a', href=True)
+                for social_link in social_links:
+                    href = social_link.get('href', '')
+                    if 'mailto:' in href:
+                        socials['email'] = href.replace('mailto:', '')
+                    elif 'twitter.com' in href or 'x.com' in href:
+                        socials['twitter'] = href
+                    elif 'linkedin.com' in href:
+                        socials['linkedin'] = href
+                    elif 'facebook.com' in href:
+                        socials['facebook'] = href
+                    elif 'instagram.com' in href:
+                        socials['instagram'] = href
+                    elif 'github.com' in href:
+                        socials['github'] = href
+                    elif 'youtube.com' in href or 'youtu.be' in href:
+                        socials['youtube'] = href
+
+                if socials:
+                    data['socials'] = socials
+                    logger.debug(f"Found {len(socials)} social links")
+
+        # Extract tags from: <a href="/tags/...">
+        tags = []
+        tag_links = soup.find_all('a', href=lambda x: x and '/tags/' in x)
+        for tag_link in tag_links:
+            tag_text = tag_link.get_text(strip=True)
+            if tag_text and tag_text not in tags:
+                # Remove # prefix if present
+                tag_text = tag_text.lstrip('#')
+                tags.append(tag_text)
+
+        if tags:
+            data['tags'] = tags
+            logger.debug(f"Found tags: {', '.join(tags)}")
+
+        # Log extraction summary
+        extracted_fields = [k for k in data.keys() if k not in ['source', 'scraped_at', 'tool_url']]
+        logger.info(f"Extracted {len(extracted_fields)} fields for {data.get('tool_name', 'Unknown')}: {', '.join(extracted_fields)}")
+
         return data
 
     async def crawl(self, start_url: Optional[str] = None) -> List[Dict[str, Any]]:
