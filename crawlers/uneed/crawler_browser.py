@@ -396,8 +396,8 @@ async def main():
         ]
     )
 
-    # Set headless=False to see the browser
-    async with UneedBrowserCrawler(headless=False, debug_html=True) as crawler:
+    # Set headless=True for faster, background execution
+    async with UneedBrowserCrawler(headless=True, debug_html=True) as crawler:
         await crawler.crawl()
 
         if crawler.data:
