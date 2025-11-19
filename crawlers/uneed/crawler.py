@@ -158,17 +158,36 @@ class UneedCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         tool_links = []
 
-        # Debug: Log total number of links found
-        all_links = soup.find_all('a', href=True)
-        logger.info(f"Total links found on page: {len(all_links)}")
+        # Target the specific container div that holds today's launches
+        # XPath: //div[@class='pb-4 w-full']
+        container = soup.find('div', class_='pb-4 w-full')
 
-        # Find all links containing /tool/ or /t/
+        if not container:
+            # Fallback: try variations of the class
+            container = soup.find('div', class_='pb-4')
+            if not container:
+                logger.warning("Could not find container div with class 'pb-4 w-full'")
+                container = soup  # Search entire document as fallback
+            else:
+                logger.info("Found container div with class 'pb-4' (partial match)")
+        else:
+            logger.info("Found container div with class 'pb-4 w-full'")
+
+        # Find all links containing /tool/ within the container
+        all_links = container.find_all('a', href=True)
+        logger.info(f"Total links found in container: {len(all_links)}")
+
         for link in all_links:
             href = link['href']
-            # Check for various possible patterns
-            if '/tool/' in href or href.startswith('/t/'):
-                full_url = urljoin(url, href)
-                # Remove duplicates and fragments
+            # Look for links containing /tool/
+            if '/tool/' in href:
+                # Handle both absolute and relative URLs
+                if href.startswith('http'):
+                    full_url = href
+                else:
+                    full_url = urljoin(url, href)
+
+                # Remove duplicates, fragments, and query parameters
                 clean_url = full_url.split('#')[0].split('?')[0]
                 if clean_url not in tool_links:
                     tool_links.append(clean_url)
@@ -178,7 +197,7 @@ class UneedCrawler:
 
         # If no tools found, log some sample links for debugging
         if len(tool_links) == 0:
-            logger.warning("No tool links found. Sample links from page:")
+            logger.warning("No tool links found. Sample links from container:")
             for i, link in enumerate(all_links[:10]):
                 logger.warning(f"  Sample link {i+1}: {link.get('href', 'NO HREF')}")
 
