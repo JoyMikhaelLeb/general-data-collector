@@ -158,31 +158,19 @@ class UneedCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         tool_links = []
 
-        # Target the specific container that holds today's launches
-        # XPath: //div[@class='flex flex-col']/div
-        # Structure: <div class="flex flex-col"><div class="relative"><a href="/tool/...">
+        # Target the specific anchor tags that hold tool links
+        # XPath: //a[@class='flex relative items-center py-4 w-full group']
+        # Structure: <a href="/tool/email-checker" class="flex relative items-center py-4 w-full group">
 
-        # Find the parent container with class 'flex flex-col'
-        parent_container = soup.find('div', class_='flex flex-col')
+        # Find all anchor tags with the specific class that contains tool links
+        tool_links_elements = soup.find_all('a', class_='flex relative items-center py-4 w-full group')
+        logger.info(f"Found {len(tool_links_elements)} anchor tags with tool link class")
 
-        if not parent_container:
-            logger.warning("Could not find parent container div with class 'flex flex-col'")
-            # Fallback: search entire document
-            parent_container = soup
-        else:
-            logger.info("Found parent container div with class 'flex flex-col'")
+        # Extract hrefs from each link
+        for link in tool_links_elements:
+            href = link.get('href')
 
-        # Find all child divs with class 'relative' that contain tool links
-        tool_divs = parent_container.find_all('div', class_='relative')
-        logger.info(f"Found {len(tool_divs)} tool divs with class 'relative'")
-
-        # Extract links from each tool div
-        for tool_div in tool_divs:
-            # Find the <a> tag with href containing /tool/
-            link = tool_div.find('a', href=lambda x: x and '/tool/' in x)
-
-            if link:
-                href = link['href']
+            if href and '/tool/' in href:
                 # Handle both absolute and relative URLs
                 if href.startswith('http'):
                     full_url = href
@@ -197,17 +185,18 @@ class UneedCrawler:
 
         logger.info(f"Found {len(tool_links)} unique tool links")
 
-        # If no tools found, log some sample divs for debugging
+        # If no tools found, try fallback and log debugging info
         if len(tool_links) == 0:
-            logger.warning("No tool links found. Debugging info:")
-            all_relative_divs = soup.find_all('div', class_='relative', limit=5)
-            logger.warning(f"Total divs with class 'relative' in entire document: {len(soup.find_all('div', class_='relative'))}")
+            logger.warning("No tool links found with specific class. Trying fallback...")
 
-            # Show sample links from anywhere on the page
-            all_links = soup.find_all('a', href=True, limit=10)
-            logger.warning("Sample links from page:")
-            for i, link in enumerate(all_links[:10]):
-                logger.warning(f"  Sample link {i+1}: {link.get('href', 'NO HREF')}")
+            # Fallback: try to find any links with /tool/ in href
+            all_tool_links = soup.find_all('a', href=lambda x: x and '/tool/' in x)
+            logger.warning(f"Fallback found {len(all_tool_links)} links containing '/tool/'")
+
+            for link in all_tool_links[:10]:  # Limit to first 10 for logging
+                href = link.get('href')
+                classes = link.get('class', [])
+                logger.warning(f"  Found: {href} with classes: {' '.join(classes)}")
 
         return tool_links
 
