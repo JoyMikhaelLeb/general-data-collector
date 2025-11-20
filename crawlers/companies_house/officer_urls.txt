@@ -1,0 +1,7 @@
+# Officer Profile URLs
+# One URL per line
+# Format: https://find-and-update.company-information.service.gov.uk/officers/{OFFICER_ID}/appointments
+
+# Example (replace with actual officer URLs):
+# https://find-and-update.company-information.service.gov.uk/officers/abc123xyz/appointments
+# https://find-and-update.company-information.service.gov.uk/officers/def456uvw/appointments
