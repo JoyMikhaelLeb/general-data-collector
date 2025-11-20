@@ -57,7 +57,8 @@ class CompaniesHouseCrawler:
         output_dir: str = "data/companies_house",
         rate_limit: float = 2.0,
         max_retries: int = 3,
-        timeout: int = 30
+        timeout: int = 30,
+        debug_html: bool = False
     ):
         """
         Initialize the crawler.
@@ -67,12 +68,17 @@ class CompaniesHouseCrawler:
             rate_limit: Minimum seconds between requests
             max_retries: Maximum number of retry attempts
             timeout: Request timeout in seconds
+            debug_html: Save HTML files for debugging
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.debug_dir = self.output_dir / "debug"
+        if debug_html:
+            self.debug_dir.mkdir(parents=True, exist_ok=True)
         self.rate_limit = rate_limit
         self.max_retries = max_retries
         self.timeout = timeout
+        self.debug_html = debug_html
         self.session: Optional[aiohttp.ClientSession] = None
         self.data: List[Dict[str, Any]] = []
 
@@ -225,14 +231,51 @@ class CompaniesHouseCrawler:
         soup = BeautifulSoup(html, 'html.parser')
         officers = []
 
-        # Officers are typically in list items or appointment divs
-        officer_items = soup.select('div.appointment, li.officer-item, div[class*="officer"]')
+        # Try multiple selector patterns for officers
+        # Pattern 1: div.appointment (common structure)
+        officer_items = soup.select('div.appointment')
 
-        # Alternative: table rows for officers
+        # Pattern 2: Look for list items in appointments
         if not officer_items:
-            officer_items = soup.select('table tbody tr')
+            officer_items = soup.select('#officer-list li, ul.appointments li')
 
-        logger.info(f"Found {len(officer_items)} officer entries")
+        # Pattern 3: Look for any div containing officer data
+        if not officer_items:
+            officer_items = soup.select('div[id*="officer"], div[class*="officer"]')
+
+        # Pattern 4: Table rows
+        if not officer_items:
+            officer_items = soup.select('table.appointments tbody tr, table tbody tr')
+
+        # Pattern 5: Generic appointment containers
+        if not officer_items:
+            officer_items = soup.select('.appointment-1, .appointment-2, .appointment-3')
+
+        logger.info(f"Found {len(officer_items)} officer container elements")
+
+        # Debug: If no officers found, log what we DO find
+        if len(officer_items) == 0:
+            logger.warning("No officer items found with standard selectors")
+            logger.warning(f"Checking page for any links containing '/officers/'...")
+
+            # Check for any officer links on the page
+            officer_links = soup.find_all('a', href=lambda x: x and '/officers/' in x)
+            logger.warning(f"Found {len(officer_links)} links containing '/officers/'")
+
+            if officer_links:
+                logger.warning("Sample officer links found:")
+                for link in officer_links[:5]:
+                    logger.warning(f"  - {link.get('href')}: {link.get_text(strip=True)[:50]}")
+
+            # Try to find any structured content
+            all_divs = soup.find_all('div', limit=10)
+            logger.warning(f"Sample divs on page (first 10 class names):")
+            for div in all_divs:
+                classes = div.get('class', [])
+                if classes:
+                    logger.warning(f"  - {' '.join(classes)}")
+
+        logger.info(f"Attempting to parse {len(officer_items)} officer entries")
 
         for item in officer_items:
             try:
@@ -352,10 +395,27 @@ class CompaniesHouseCrawler:
         logger.info(f"Fetching officers from: {officers_url}")
 
         html = await self.fetch(officers_url)
-        if html:
-            return self.parse_officers_page(html, officers_url)
+        if not html:
+            logger.error(f"Failed to fetch officers page: {officers_url}")
+            return []
 
-        return []
+        # Save officers HTML for debugging
+        if self.debug_html:
+            company_number = company_url.split('/')[-1]
+            officers_file = self.debug_dir / f"officers_{company_number}.html"
+            with open(officers_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+            logger.info(f"Saved officers HTML to: {officers_file}")
+
+        officers = self.parse_officers_page(html, officers_url)
+
+        if not officers:
+            logger.warning(f"No officers found on page: {officers_url}")
+            logger.warning("This might indicate the page structure has changed or officers are not publicly listed")
+            if self.debug_html:
+                logger.warning(f"Check the saved HTML file for manual inspection: {officers_file}")
+
+        return officers
 
     def parse_company_profile(self, html: str, company_url: str, search_query: str) -> Dict[str, Any]:
         """
@@ -571,7 +631,7 @@ async def main():
         ]
         logger.warning(f"{input_file} not found. Using default company list.")
 
-    async with CompaniesHouseCrawler(rate_limit=2.0) as crawler:
+    async with CompaniesHouseCrawler(rate_limit=2.0, debug_html=True) as crawler:
         await crawler.crawl(companies)
 
         if crawler.data:
