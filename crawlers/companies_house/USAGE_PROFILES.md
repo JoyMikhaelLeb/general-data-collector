@@ -45,6 +45,7 @@ Each officer profile includes:
 - `profile_url`: Link to profile page
 - `date_of_birth`: Date of birth (if public)
 - `nationality`: Nationality
+- `companies_of_profile`: **NEW** - List of all company URLs associated with this officer
 - `appointment_count`: Total number of appointments
 - `active_appointments`: Number of active appointments
 - `resigned_appointments`: Number of resigned appointments
@@ -70,6 +71,11 @@ Each appointment in the `appointments` array includes:
     "officer_id": "abc123xyz",
     "officer_name": "JOHN DOE",
     "nationality": "British",
+    "companies_of_profile": [
+      "https://find-and-update.company-information.service.gov.uk/company/12345678",
+      "https://find-and-update.company-information.service.gov.uk/company/87654321",
+      "https://find-and-update.company-information.service.gov.uk/company/11223344"
+    ],
     "appointment_count": 5,
     "active_appointments": 3,
     "resigned_appointments": 2,

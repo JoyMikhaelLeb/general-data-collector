@@ -182,11 +182,34 @@ class OfficerProfileCrawler:
         if nationality_elem:
             data['nationality'] = nationality_elem.get_text(strip=True)
 
+        # Extract all company links from the page
+        # This creates a list of all companies the officer is/was associated with
+        company_links = []
+        all_company_links = soup.find_all('a', href=lambda x: x and '/company/' in x)
+
+        for link in all_company_links:
+            href = link.get('href', '')
+            if href and '/company/' in href:
+                # Build full URL
+                full_url = urljoin(self.BASE_URL, href)
+                # Avoid duplicates
+                if full_url not in company_links:
+                    company_links.append(full_url)
+
+        # Always include companies_of_profile as a list (even if empty or single item)
+        data['companies_of_profile'] = company_links
+        logger.debug(f"Found {len(company_links)} company associations")
+
         # Extract all appointments (current and previous)
         appointments = []
 
         # Look for appointment sections
-        appointment_sections = soup.select('div.appointment, li.appointment, tr.appointment')
+        # Pattern: div.appointment-1, div.appointment-2, etc.
+        appointment_sections = soup.select('div[class^="appointment-"]')
+
+        # Fallback patterns
+        if not appointment_sections:
+            appointment_sections = soup.select('div.appointment, li.appointment, tr.appointment')
 
         if not appointment_sections:
             # Try table rows
