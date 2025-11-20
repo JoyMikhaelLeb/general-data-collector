@@ -2,13 +2,18 @@
 Companies House UK Web Crawler
 
 This crawler searches for UK companies on find-and-update.company-information.service.gov.uk
-and extracts basic company information.
+and extracts detailed company information including officers.
 
 Usage:
     python3 crawler.py
 
 Input: companies.txt (one company name per line)
 Output: data/companies_house/companies_TIMESTAMP.json
+
+Features:
+    - Extracts company profile data
+    - Fetches officers from /officers endpoint
+    - Includes officer links and details (role, appointment date, etc.)
 """
 
 import asyncio
@@ -41,6 +46,7 @@ class CompaniesHouseCrawler:
     - Incorporation date
     - Registered address
     - Company type
+    - Officers information (name, role, appointment date, etc.)
     """
 
     BASE_URL = "https://find-and-update.company-information.service.gov.uk"
@@ -205,6 +211,102 @@ class CompaniesHouseCrawler:
 
         return results
 
+    def parse_officers_page(self, html: str, officers_url: str) -> List[Dict[str, Any]]:
+        """
+        Parse officers page to extract officer information.
+
+        Args:
+            html: HTML content of officers page
+            officers_url: URL of the officers page
+
+        Returns:
+            List of officer dictionaries
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        officers = []
+
+        # Officers are typically in div elements with specific classes
+        # Look for officer appointment sections
+        officer_sections = soup.select('div.appointments-list div[id^="officer-"], div.appointment')
+
+        if not officer_sections:
+            # Alternative selector - try finding by structure
+            officer_sections = soup.select('div#content-container > div.grid-row')
+
+        logger.info(f"Found {len(officer_sections)} potential officer sections")
+
+        for section in officer_sections:
+            try:
+                officer_data = {}
+
+                # Extract officer name
+                name_elem = section.select_one('a[href*="/officers/"], h2 a, .heading-small a, strong a')
+                if name_elem:
+                    officer_data['officer_name'] = name_elem.get_text(strip=True)
+                    officer_link = name_elem.get('href', '')
+                    if officer_link:
+                        officer_data['officer_link'] = urljoin(self.BASE_URL, officer_link)
+
+                # Extract officer role/position
+                role_elem = section.select_one('.role, dd:contains("Role"), [class*="appointment"]')
+                if role_elem:
+                    officer_data['role'] = role_elem.get_text(strip=True)
+
+                # Extract appointment date
+                appt_date = section.select_one('dd:contains("Appointed"), [class*="appointed"]')
+                if appt_date:
+                    officer_data['appointed_on'] = appt_date.get_text(strip=True)
+
+                # Extract occupation
+                occupation = section.select_one('dd:contains("Occupation")')
+                if occupation:
+                    officer_data['occupation'] = occupation.get_text(strip=True)
+
+                # Extract nationality
+                nationality = section.select_one('dd:contains("Nationality")')
+                if nationality:
+                    officer_data['nationality'] = nationality.get_text(strip=True)
+
+                # Extract country of residence
+                residence = section.select_one('dd:contains("Country of residence")')
+                if residence:
+                    officer_data['country_of_residence'] = residence.get_text(strip=True)
+
+                # Extract address
+                address_elem = section.select_one('dd:contains("Correspondence address"), address')
+                if address_elem:
+                    officer_data['address'] = address_elem.get_text(strip=True)
+
+                # Extract date of birth (month/year only for privacy)
+                dob = section.select_one('dd:contains("Date of birth"), [class*="date-of-birth"]')
+                if dob:
+                    officer_data['date_of_birth'] = dob.get_text(strip=True)
+
+                # Parse definition lists (dl elements) for key-value pairs
+                dl_elements = section.find_all('dl')
+                for dl in dl_elements:
+                    dt_elements = dl.find_all('dt')
+                    dd_elements = dl.find_all('dd')
+
+                    for dt, dd in zip(dt_elements, dd_elements):
+                        key = dt.get_text(strip=True).lower().replace(' ', '_').replace('-', '_')
+                        value = dd.get_text(strip=True)
+
+                        if key and value and key not in officer_data:
+                            officer_data[key] = value
+
+                # Only add if we have meaningful data (at least a name)
+                if officer_data.get('officer_name') or officer_data.get('role'):
+                    officers.append(officer_data)
+                    logger.debug(f"Extracted officer: {officer_data.get('officer_name', 'Unknown')}")
+
+            except Exception as e:
+                logger.warning(f"Error parsing officer section: {e}")
+                continue
+
+        logger.info(f"Successfully extracted {len(officers)} officers")
+        return officers
+
     def parse_company_profile(self, html: str, company_url: str, search_query: str) -> Dict[str, Any]:
         """
         Parse company profile page to extract detailed information.
@@ -283,22 +385,57 @@ class CompaniesHouseCrawler:
         logger.debug(f"Extracted profile data for: {data.get('company_name', 'Unknown')}")
         return data
 
-    async def fetch_company_details(self, company_url: str, search_query: str) -> Optional[Dict[str, Any]]:
+    async def fetch_officers(self, company_url: str) -> List[Dict[str, Any]]:
+        """
+        Fetch and parse officers information from company officers page.
+
+        Args:
+            company_url: URL to company profile page
+
+        Returns:
+            List of officer dictionaries or empty list if failed
+        """
+        # Construct officers URL by appending /officers
+        officers_url = f"{company_url.rstrip('/')}/officers"
+        logger.info(f"Fetching officers from: {officers_url}")
+
+        html = await self.fetch(officers_url)
+        if html:
+            return self.parse_officers_page(html, officers_url)
+
+        return []
+
+    async def fetch_company_details(self, company_url: str, search_query: str, fetch_officers: bool = True) -> Optional[Dict[str, Any]]:
         """
         Fetch and parse detailed company information from profile page.
 
         Args:
             company_url: URL to company profile page
             search_query: Original search query
+            fetch_officers: If True, also fetch officers information
 
         Returns:
-            Dictionary with company details or None if failed
+            Dictionary with company details (including officers if requested) or None if failed
         """
         logger.info(f"Fetching company details from: {company_url}")
 
         html = await self.fetch(company_url)
         if html:
-            return self.parse_company_profile(html, company_url, search_query)
+            company_data = self.parse_company_profile(html, company_url, search_query)
+
+            # Fetch officers if requested
+            if fetch_officers:
+                officers = await self.fetch_officers(company_url)
+                if officers:
+                    company_data['officers'] = officers
+                    company_data['officers_count'] = len(officers)
+                    logger.info(f"Added {len(officers)} officers to company data")
+                else:
+                    company_data['officers'] = []
+                    company_data['officers_count'] = 0
+                    logger.warning("No officers found")
+
+            return company_data
 
         return None
 
