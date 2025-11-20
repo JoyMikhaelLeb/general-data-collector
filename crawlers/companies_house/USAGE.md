@@ -26,8 +26,9 @@ Results are saved to `data/companies_house/companies_TIMESTAMP.json`
 
 ## Output Format
 
-The crawler now fetches **detailed company information** from each company's profile page (Overview tab).
+The crawler now fetches **detailed company information** from each company's profile page (Overview tab) **plus officer information**.
 
+### Company Fields
 Each company entry includes:
 - `source`: Always "companies_house_uk"
 - `search_query`: The search term used
@@ -42,7 +43,22 @@ Each company entry includes:
 - `nature_of_business`: SIC codes and business description
 - `accounts_info`: Next accounts filing information
 - `confirmation_statement`: Next confirmation statement due date
+- `officers`: **NEW** - List of company officers (directors, secretaries, etc.)
+- `officer_count`: **NEW** - Total number of officers
 - Plus any other fields found on the Overview tab
+
+### Officer Fields
+Each officer in the `officers` list includes:
+- `officer_name`: Full name of the officer
+- `officer_link`: Link to officer's profile page
+- `role`: Position (Director, Secretary, etc.)
+- `appointed_on`: Appointment date
+- `resigned_on`: Resignation date (if applicable)
+- `nationality`: Officer's nationality
+- `occupation`: Stated occupation
+- `country_of_residence`: Country of residence
+- `address`: Service/correspondence address
+- Plus any other fields found on the officer page
 
 ### Example Output
 ```json
@@ -60,7 +76,30 @@ Each company entry includes:
     "registered_address": "8 Canada Square, London, E14 5HQ",
     "nature_of_business": "64191 - Banks",
     "accounts_info": "Next accounts made up to 31 December 2025 due by 30 September 2026",
-    "confirmation_statement": "Next statement date 31 December 2025 due by 14 January 2026"
+    "confirmation_statement": "Next statement date 31 December 2025 due by 14 January 2026",
+    "officers": [
+      {
+        "officer_name": "JOHN DOE",
+        "officer_link": "https://find-and-update.company-information.service.gov.uk/officers/abc123xyz/appointments",
+        "role": "Director",
+        "appointed_on": "1 March 2020",
+        "nationality": "British",
+        "occupation": "Company Director",
+        "country_of_residence": "United Kingdom",
+        "address": "8 Canada Square, London, E14 5HQ"
+      },
+      {
+        "officer_name": "JANE SMITH",
+        "officer_link": "https://find-and-update.company-information.service.gov.uk/officers/def456uvw/appointments",
+        "role": "Secretary",
+        "appointed_on": "15 June 2018",
+        "nationality": "British",
+        "occupation": "Company Secretary",
+        "country_of_residence": "United Kingdom",
+        "address": "8 Canada Square, London, E14 5HQ"
+      }
+    ],
+    "officer_count": 2
   }
 ]
 ```
@@ -115,5 +154,7 @@ If you get HTTP 429 errors:
 
 - This crawler searches publicly available data on Companies House
 - Search results may return multiple matches for a single query
-- The crawler extracts data from search results pages only
-- For detailed company information, you may need to visit the company_link URL
+- The crawler now automatically visits company profile pages for detailed information
+- **Officer data is fetched automatically** from the `/officers` endpoint for each company
+- The crawler respects rate limits with a 2-second delay between requests
+- Each company lookup makes 2 requests: one for company profile, one for officers

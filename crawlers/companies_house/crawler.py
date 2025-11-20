@@ -41,6 +41,12 @@ class CompaniesHouseCrawler:
     - Incorporation date
     - Registered address
     - Company type
+    - Officers (directors, secretaries, etc.) including:
+      - Officer name and profile link
+      - Role/position
+      - Appointment and resignation dates
+      - Nationality, occupation, country of residence
+      - Service address
     """
 
     BASE_URL = "https://find-and-update.company-information.service.gov.uk"
@@ -205,6 +211,152 @@ class CompaniesHouseCrawler:
 
         return results
 
+    def parse_officers_page(self, html: str, officers_url: str) -> List[Dict[str, Any]]:
+        """
+        Parse officers page to extract officer information.
+
+        Args:
+            html: HTML content of officers page
+            officers_url: URL of the officers page
+
+        Returns:
+            List of officer dictionaries
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        officers = []
+
+        # Officers are typically in list items or appointment divs
+        officer_items = soup.select('div.appointment, li.officer-item, div[class*="officer"]')
+
+        # Alternative: table rows for officers
+        if not officer_items:
+            officer_items = soup.select('table tbody tr')
+
+        logger.info(f"Found {len(officer_items)} officer entries")
+
+        for item in officer_items:
+            try:
+                officer_data = {}
+
+                # Extract officer name and link
+                name_link = item.select_one('a[href*="/officers/"], a.officer-name, h3 a, .heading-small a')
+                if name_link:
+                    officer_data['officer_name'] = name_link.get_text(strip=True)
+                    officer_link = name_link.get('href', '')
+                    if officer_link:
+                        officer_data['officer_link'] = urljoin(self.BASE_URL, officer_link)
+                else:
+                    # Try to find name without link
+                    name_elem = item.select_one('.officer-name, h3, strong')
+                    if name_elem:
+                        officer_data['officer_name'] = name_elem.get_text(strip=True)
+
+                # Skip if no name found
+                if not officer_data.get('officer_name'):
+                    continue
+
+                # Extract officer role/position
+                role_elem = item.select_one('.role, .officer-role, [class*="role"], dd')
+                if role_elem:
+                    officer_data['role'] = role_elem.get_text(strip=True)
+
+                # Extract appointment date
+                appointed_elem = item.select_one('[class*="appointed"], [class*="appointment-date"]')
+                if appointed_elem:
+                    date_text = appointed_elem.get_text(strip=True)
+                    # Clean up text like "Appointed on 12 January 2020"
+                    if 'appointed' in date_text.lower():
+                        date_text = date_text.lower().replace('appointed on', '').replace('appointed', '').strip()
+                    officer_data['appointed_on'] = date_text
+
+                # Extract resignation date if present
+                resigned_elem = item.select_one('[class*="resigned"], [class*="resignation-date"]')
+                if resigned_elem:
+                    date_text = resigned_elem.get_text(strip=True)
+                    if 'resigned' in date_text.lower():
+                        date_text = date_text.lower().replace('resigned on', '').replace('resigned', '').strip()
+                    officer_data['resigned_on'] = date_text
+
+                # Extract nationality if present
+                nationality_elem = item.select_one('[class*="nationality"]')
+                if nationality_elem:
+                    officer_data['nationality'] = nationality_elem.get_text(strip=True)
+
+                # Extract occupation if present
+                occupation_elem = item.select_one('[class*="occupation"]')
+                if occupation_elem:
+                    officer_data['occupation'] = occupation_elem.get_text(strip=True)
+
+                # Extract country of residence
+                residence_elem = item.select_one('[class*="country-of-residence"]')
+                if residence_elem:
+                    officer_data['country_of_residence'] = residence_elem.get_text(strip=True)
+
+                # Extract address (service address)
+                address_elem = item.select_one('address, [class*="address"]')
+                if address_elem:
+                    officer_data['address'] = address_elem.get_text(strip=True)
+
+                # Extract from definition lists (dl/dt/dd)
+                dl = item.find('dl')
+                if dl:
+                    dt_elements = dl.find_all('dt')
+                    dd_elements = dl.find_all('dd')
+
+                    for dt, dd in zip(dt_elements, dd_elements):
+                        key = dt.get_text(strip=True).lower().replace(' ', '_').replace('-', '_')
+                        value = dd.get_text(strip=True)
+
+                        if 'correspondence address' in key or 'service address' in key:
+                            officer_data['address'] = value
+                        elif 'appointed' in key:
+                            officer_data['appointed_on'] = value
+                        elif 'resigned' in key:
+                            officer_data['resigned_on'] = value
+                        elif 'nationality' in key:
+                            officer_data['nationality'] = value
+                        elif 'occupation' in key:
+                            officer_data['occupation'] = value
+                        elif 'country' in key and 'residence' in key:
+                            officer_data['country_of_residence'] = value
+                        elif key and value and key not in officer_data:
+                            officer_data[key] = value
+
+                # Only add if we have meaningful data
+                if officer_data and len(officer_data) > 1:  # More than just name
+                    officers.append(officer_data)
+                    logger.debug(f"Extracted officer: {officer_data.get('officer_name')}")
+
+            except Exception as e:
+                logger.warning(f"Error parsing officer entry: {e}")
+                continue
+
+        return officers
+
+    async def fetch_officers(self, company_url: str) -> List[Dict[str, Any]]:
+        """
+        Fetch and parse officer information for a company.
+
+        Args:
+            company_url: URL of the company profile
+
+        Returns:
+            List of officer dictionaries
+        """
+        # Construct officers URL by appending /officers
+        if not company_url.endswith('/'):
+            officers_url = f"{company_url}/officers"
+        else:
+            officers_url = f"{company_url}officers"
+
+        logger.info(f"Fetching officers from: {officers_url}")
+
+        html = await self.fetch(officers_url)
+        if html:
+            return self.parse_officers_page(html, officers_url)
+
+        return []
+
     def parse_company_profile(self, html: str, company_url: str, search_query: str) -> Dict[str, Any]:
         """
         Parse company profile page to extract detailed information.
@@ -283,22 +435,33 @@ class CompaniesHouseCrawler:
         logger.debug(f"Extracted profile data for: {data.get('company_name', 'Unknown')}")
         return data
 
-    async def fetch_company_details(self, company_url: str, search_query: str) -> Optional[Dict[str, Any]]:
+    async def fetch_company_details(self, company_url: str, search_query: str, fetch_officers: bool = True) -> Optional[Dict[str, Any]]:
         """
         Fetch and parse detailed company information from profile page.
 
         Args:
             company_url: URL to company profile page
             search_query: Original search query
+            fetch_officers: If True, also fetch officer information
 
         Returns:
-            Dictionary with company details or None if failed
+            Dictionary with company details (including officers) or None if failed
         """
         logger.info(f"Fetching company details from: {company_url}")
 
         html = await self.fetch(company_url)
         if html:
-            return self.parse_company_profile(html, company_url, search_query)
+            company_data = self.parse_company_profile(html, company_url, search_query)
+
+            # Fetch officers if requested
+            if fetch_officers and company_data:
+                officers = await self.fetch_officers(company_url)
+                if officers:
+                    company_data['officers'] = officers
+                    company_data['officer_count'] = len(officers)
+                    logger.info(f"Found {len(officers)} officers for {company_data.get('company_name', 'Unknown')}")
+
+            return company_data
 
         return None
 
