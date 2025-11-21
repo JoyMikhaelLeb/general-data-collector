@@ -64,16 +64,50 @@ class UneedBrowserCrawler:
         self.headless = headless
         self.debug_html = debug_html
         self.browser: Optional[Browser] = None
+        self.context = None
         self.data: List[Dict[str, Any]] = []
 
     async def start(self):
         """Initialize the browser."""
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=self.headless)
+
+        # Launch browser with args to avoid detection in headless mode
+        launch_args = {
+            'headless': self.headless,
+        }
+
+        # Add extra args for headless mode to avoid detection
+        if self.headless:
+            launch_args['args'] = [
+                '--disable-blink-features=AutomationControlled',  # Avoid detection
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+            ]
+
+        self.browser = await self.playwright.chromium.launch(**launch_args)
+
+        # Create context with realistic settings
+        context_args = {
+            'viewport': {'width': 1920, 'height': 1080},
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+
+        # Create a new context (like an incognito window)
+        self.context = await self.browser.new_context(**context_args)
+
+        # Add extra JS to mask automation
+        await self.context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """)
+
         logger.info(f"Browser started (headless={self.headless})")
 
     async def close(self):
         """Close the browser."""
+        if self.context:
+            await self.context.close()
         if self.browser:
             await self.browser.close()
         if self.playwright:
@@ -89,44 +123,58 @@ class UneedBrowserCrawler:
         """Async context manager exit."""
         await self.close()
 
-    async def fetch_page(self, url: str, wait_for_selector: Optional[str] = None) -> Optional[str]:
+    async def fetch_page(self, url: str, wait_for_selector: Optional[str] = None, extra_wait: int = 3000) -> Optional[str]:
         """
         Fetch a page and wait for JavaScript to render.
 
         Args:
             url: URL to fetch
             wait_for_selector: Optional CSS selector to wait for before getting HTML
+            extra_wait: Additional wait time in ms for content to fully load (default 3000)
 
         Returns:
             Rendered HTML or None if failed
         """
-        if not self.browser:
-            raise RuntimeError("Browser not started. Use async context manager.")
+        if not self.context:
+            raise RuntimeError("Browser context not started. Use async context manager.")
 
         try:
-            page = await self.browser.new_page()
+            page = await self.context.new_page()
 
             logger.info(f"Navigating to: {url}")
-            await page.goto(url, wait_until='networkidle')
+            # Wait for network to be idle (all requests finished)
+            await page.goto(url, wait_until='networkidle', timeout=30000)
 
             # Wait for specific selector if provided
             if wait_for_selector:
                 logger.info(f"Waiting for selector: {wait_for_selector}")
-                await page.wait_for_selector(wait_for_selector, timeout=10000)
-            else:
-                # Default: wait a bit for dynamic content to load
-                await page.wait_for_timeout(2000)
+                try:
+                    await page.wait_for_selector(wait_for_selector, timeout=15000)
+                    logger.info(f"Selector found: {wait_for_selector}")
+                except Exception as e:
+                    logger.warning(f"Selector not found within timeout: {wait_for_selector} - {e}")
+
+            # Extra wait for dynamic content to fully load (especially in headless mode)
+            logger.debug(f"Waiting {extra_wait}ms for content to fully render...")
+            await page.wait_for_timeout(extra_wait)
+
+            # Log if we found the expected content
+            if wait_for_selector:
+                count = await page.locator(wait_for_selector).count()
+                logger.info(f"Found {count} elements matching '{wait_for_selector}'")
 
             html = await page.content()
             await page.close()
 
-            logger.info(f"Successfully fetched and rendered: {url}")
+            logger.info(f"Successfully fetched and rendered: {url} ({len(html)} bytes)")
             await asyncio.sleep(self.rate_limit)
 
             return html
 
         except Exception as e:
             logger.error(f"Error fetching {url}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
     def parse_main_page(self, html: str, url: str) -> List[str]:
@@ -330,10 +378,12 @@ class UneedBrowserCrawler:
         url = start_url or self.BASE_URL
 
         logger.info(f"Starting browser crawl from: {url}")
+        logger.info(f"Mode: {'Headless' if self.headless else 'Visible'}")
 
         # Fetch and render main page
-        # Wait for tool links to appear
-        html = await self.fetch_page(url, wait_for_selector='a[href*="/tool/"]')
+        # Wait for tool links to appear - give extra time in headless mode
+        extra_wait = 5000 if self.headless else 3000
+        html = await self.fetch_page(url, wait_for_selector='a[href*="/tool/"]', extra_wait=extra_wait)
 
         if not html:
             logger.error("Failed to fetch main page")
@@ -351,15 +401,21 @@ class UneedBrowserCrawler:
 
         if not tool_links:
             logger.error("No tool links found in rendered page")
+            logger.error("This usually means:")
+            logger.error("  1. JavaScript didn't execute properly")
+            logger.error("  2. The page structure changed")
+            logger.error("  3. Headless mode was detected and blocked")
+            if self.debug_html:
+                logger.error(f"  Check saved HTML: {main_page_file}")
             return []
 
-        logger.info(f"Found {len(tool_links)} tools to scrape")
+        logger.info(f"✓ Found {len(tool_links)} tools to scrape")
 
         # Fetch details for each tool
         for i, tool_url in enumerate(tool_links, 1):
             logger.info(f"Processing tool {i}/{len(tool_links)}: {tool_url}")
 
-            tool_html = await self.fetch_page(tool_url)
+            tool_html = await self.fetch_page(tool_url, extra_wait=2000)
             if tool_html:
                 tool_data = self.parse_tool_page(tool_html, tool_url)
                 self.data.append(tool_data)
