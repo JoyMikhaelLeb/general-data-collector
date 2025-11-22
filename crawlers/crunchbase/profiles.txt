@@ -1,0 +1,10 @@
+# Crunchbase Person Profiles
+# Add one profile name per line (the URL slug from crunchbase.com/person/PROFILE-NAME)
+# Lines starting with # are comments and will be ignored
+
+# Example profiles:
+# elon-musk
+# sam-altman
+# mark-zuckerberg
+
+# Add your profiles below:
