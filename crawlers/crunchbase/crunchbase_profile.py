@@ -493,7 +493,10 @@ async def main():
     # Configuration
     EMAIL = "joy.i.mikhael@outlook.com"
     PASSWORD = "Bane70213365"
-    PROFILES_FILE = "crawlers/crunchbase/profiles.txt"
+
+    # Get the script's directory
+    SCRIPT_DIR = Path(__file__).parent
+    PROFILES_FILE = SCRIPT_DIR / "profiles.txt"
     OUTPUT_DIR = "data/crunchbase/profiles"
 
     crawler = CrunchbaseProfileCrawler(
