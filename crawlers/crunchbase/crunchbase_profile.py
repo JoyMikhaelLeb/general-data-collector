@@ -142,7 +142,14 @@ class CrunchbaseProfileCrawler:
             logger.info(f"Navigating to login page: {self.LOGIN_URL}")
             await self.page.goto(self.LOGIN_URL, wait_until='networkidle', timeout=30000)
 
+            # Take screenshot before login
+            if self.debug_html:
+                screenshot_path = self.debug_dir / "login_page.png"
+                await self.page.screenshot(path=str(screenshot_path))
+                logger.info(f"Saved login page screenshot to {screenshot_path}")
+
             # Wait for login form
+            logger.info("Waiting for login form...")
             await self.page.wait_for_selector('input[type="email"], input[name="email"]', timeout=10000)
 
             logger.info("Filling in login credentials...")
@@ -150,35 +157,93 @@ class CrunchbaseProfileCrawler:
             # Fill email
             email_selector = 'input[type="email"], input[name="email"]'
             await self.page.fill(email_selector, self.email)
+            logger.info(f"Filled email field with: {self.email}")
+
+            # Small delay for realistic behavior
+            await asyncio.sleep(0.5)
 
             # Fill password
             password_selector = 'input[type="password"], input[name="password"]'
             await self.page.fill(password_selector, self.password)
+            logger.info("Filled password field")
+
+            # Small delay before clicking
+            await asyncio.sleep(0.5)
+
+            # Take screenshot before clicking login
+            if self.debug_html:
+                screenshot_path = self.debug_dir / "before_login_click.png"
+                await self.page.screenshot(path=str(screenshot_path))
+                logger.info(f"Saved pre-login screenshot to {screenshot_path}")
 
             # Click login button
+            logger.info("Looking for login button...")
             login_button_selector = 'button[type="submit"], button:has-text("Log in"), button:has-text("Sign in")'
-            await self.page.click(login_button_selector)
+
+            # Try to find the button first
+            button = await self.page.query_selector(login_button_selector)
+            if button:
+                button_text = await button.inner_text()
+                logger.info(f"Found login button with text: {button_text}")
+                await button.click()
+            else:
+                logger.warning("Could not find login button with standard selectors, trying alternatives...")
+                # Try alternative selectors
+                await self.page.click('button:has-text("Log")', timeout=5000)
 
             logger.info("Waiting for login to complete...")
 
+            # Wait a bit for the page to respond
+            await asyncio.sleep(3)
+
             # Wait for navigation after login
-            await self.page.wait_for_load_state('networkidle', timeout=30000)
+            try:
+                await self.page.wait_for_load_state('networkidle', timeout=30000)
+            except Exception as e:
+                logger.warning(f"Timeout waiting for networkidle: {e}")
+
+            # Take screenshot after login attempt
+            if self.debug_html:
+                screenshot_path = self.debug_dir / "after_login.png"
+                await self.page.screenshot(path=str(screenshot_path))
+                logger.info(f"Saved post-login screenshot to {screenshot_path}")
 
             # Check if login was successful by looking for common post-login elements
             # or checking if we're still on the login page
             current_url = self.page.url
+            logger.info(f"Current URL after login: {current_url}")
+
             if 'login' not in current_url.lower():
                 logger.info("Login successful!")
                 self.logged_in = True
                 return True
             else:
                 logger.error("Login failed - still on login page")
+
+                # Save HTML for debugging
+                if self.debug_html:
+                    html_content = await self.page.content()
+                    debug_file = self.debug_dir / "login_failed.html"
+                    with open(debug_file, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    logger.info(f"Saved failed login HTML to {debug_file}")
+
                 return False
 
         except Exception as e:
             logger.error(f"Error during login: {e}")
             import traceback
             traceback.print_exc()
+
+            # Save screenshot on error
+            if self.debug_html:
+                try:
+                    screenshot_path = self.debug_dir / "login_error.png"
+                    await self.page.screenshot(path=str(screenshot_path))
+                    logger.info(f"Saved error screenshot to {screenshot_path}")
+                except:
+                    pass
+
             return False
 
     async def extract_profile_data(self, profile_name: str) -> Dict[str, Any]:
@@ -504,7 +569,7 @@ async def main():
         password=PASSWORD,
         profiles_file=PROFILES_FILE,
         output_dir=OUTPUT_DIR,
-        headless=True,  # Set to False to see browser
+        headless=False,  # Set to False to see browser
         debug_html=True,  # Save HTML for debugging
         rate_limit=2.0  # Wait 2 seconds between profiles
     )
